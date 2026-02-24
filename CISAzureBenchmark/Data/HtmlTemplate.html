@@ -1,0 +1,2359 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIS Azure Foundations Benchmark {{BENCHMARK_VERSION}} - Compliance Report</title>
+<style>
+/* ============================================================
+   CSS CUSTOM PROPERTIES / THEMING
+   ============================================================ */
+:root {
+  /* Status Colors */
+  --color-pass: #10b981;
+  --color-pass-bg: #ecfdf5;
+  --color-pass-border: #a7f3d0;
+  --color-fail: #ef4444;
+  --color-fail-bg: #fef2f2;
+  --color-fail-border: #fecaca;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-info: #3b82f6;
+  --color-info-bg: #eff6ff;
+  --color-info-border: #bfdbfe;
+  --color-error: #6b7280;
+  --color-error-bg: #f9fafb;
+  --color-error-border: #d1d5db;
+
+  /* Severity Colors */
+  --severity-critical: #dc2626;
+  --severity-high: #ea580c;
+  --severity-medium: #d97706;
+  --severity-low: #2563eb;
+  --severity-informational: #6b7280;
+
+  /* Font */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+
+  /* Transitions */
+  --transition-speed: 0.25s;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-header: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #1e40af 100%);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --text-header: #ffffff;
+  --border-color: #e2e8f0;
+  --border-color-light: #f1f5f9;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.08);
+  --shadow-xl: 0 20px 60px rgba(0,0,0,0.1);
+  --card-hover-shadow: 0 8px 25px rgba(0,0,0,0.1);
+  --table-stripe: #f8fafc;
+  --table-hover: #f1f5f9;
+  --input-bg: #ffffff;
+  --input-border: #d1d5db;
+  --badge-text-light: #ffffff;
+  --donut-track: #e2e8f0;
+  --scrollbar-track: #f1f5f9;
+  --scrollbar-thumb: #cbd5e1;
+  --detail-bg: #f8fafc;
+  --code-bg: #f1f5f9;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-header: linear-gradient(135deg, #0c1222 0%, #162033 50%, #1e3a5f 100%);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-header: #f1f5f9;
+  --border-color: #334155;
+  --border-color-light: #1e293b;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.4);
+  --shadow-xl: 0 20px 60px rgba(0,0,0,0.5);
+  --card-hover-shadow: 0 8px 25px rgba(0,0,0,0.4);
+  --table-stripe: #1a2536;
+  --table-hover: #243044;
+  --input-bg: #1e293b;
+  --input-border: #475569;
+  --badge-text-light: #ffffff;
+  --donut-track: #334155;
+  --scrollbar-track: #1e293b;
+  --scrollbar-thumb: #475569;
+  --detail-bg: #162033;
+  --code-bg: #0f172a;
+  --color-pass-bg: #052e16;
+  --color-pass-border: #166534;
+  --color-fail-bg: #450a0a;
+  --color-fail-border: #991b1b;
+  --color-warning-bg: #451a03;
+  --color-warning-border: #92400e;
+  --color-info-bg: #172554;
+  --color-info-border: #1e40af;
+  --color-error-bg: #1f2937;
+  --color-error-border: #4b5563;
+}
+
+/* ============================================================
+   BASE / RESET
+   ============================================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  transition: background var(--transition-speed) ease, color var(--transition-speed) ease;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+a { color: var(--color-info); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.report-header {
+  background: var(--bg-header);
+  padding: 32px 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.report-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -10%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 70%);
+  border-radius: 50%;
+}
+
+.report-header::after {
+  content: '';
+  position: absolute;
+  bottom: -30%;
+  left: 20%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%);
+  border-radius: 50%;
+}
+
+.header-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.header-left {
+  flex: 1;
+}
+
+.header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.header-badge .badge-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--color-pass);
+  border-radius: 50%;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+.header-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-header);
+  margin-bottom: 6px;
+  letter-spacing: -0.3px;
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255,255,255,0.6);
+  font-weight: 400;
+}
+
+.header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 18px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
+}
+
+.meta-item .meta-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.meta-item .meta-label {
+  font-weight: 500;
+  color: rgba(255,255,255,0.5);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.meta-item .meta-value {
+  color: rgba(255,255,255,0.9);
+  font-weight: 500;
+}
+
+.header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+/* Theme Toggle */
+.theme-toggle {
+  position: relative;
+  width: 56px;
+  height: 30px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+  padding: 0;
+}
+
+.theme-toggle:hover {
+  background: rgba(255,255,255,0.18);
+}
+
+.theme-toggle .toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-theme="dark"] .theme-toggle .toggle-thumb {
+  left: 29px;
+  background: #334155;
+}
+
+/* Sun icon */
+.toggle-thumb::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #f59e0b;
+  transition: all 0.3s ease;
+}
+
+[data-theme="dark"] .toggle-thumb::before {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+  border-radius: 50%;
+  box-shadow: inset -4px -2px 0 0 #fbbf24;
+}
+
+/* Sun rays */
+.toggle-thumb::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px dashed rgba(245,158,11,0.4);
+  transition: all 0.3s ease;
+}
+
+[data-theme="dark"] .toggle-thumb::after {
+  border-color: transparent;
+  width: 0;
+  height: 0;
+}
+
+.print-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: var(--radius-sm);
+  color: rgba(255,255,255,0.8);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-sans);
+}
+
+.print-btn:hover {
+  background: rgba(255,255,255,0.18);
+  color: #ffffff;
+}
+
+/* ============================================================
+   MAIN CONTAINER
+   ============================================================ */
+.main-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 40px 60px;
+}
+
+/* ============================================================
+   EXECUTIVE SUMMARY
+   ============================================================ */
+/* ---- Executive Summary: Full-width hero layout ---- */
+.executive-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+/* Top row: donut + summary stats side by side */
+.exec-top-row {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 28px;
+  align-items: stretch;
+}
+
+/* Donut Card - large and prominent */
+.score-card {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  padding: 36px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-speed) ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.score-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-fail), var(--color-warning), var(--color-pass));
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.donut-container {
+  position: relative;
+  width: 210px;
+  height: 210px;
+  margin-bottom: 20px;
+}
+
+.donut-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  filter: drop-shadow(0 4px 15px rgba(0,0,0,0.1));
+}
+
+.donut-track {
+  fill: none;
+  stroke: var(--donut-track);
+  stroke-width: 16;
+}
+
+.donut-fill {
+  fill: none;
+  stroke-width: 16;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s ease;
+}
+
+.donut-glow {
+  fill: none;
+  stroke-width: 24;
+  stroke-linecap: round;
+  opacity: 0.15;
+  transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s ease;
+}
+
+.donut-center-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.donut-percentage {
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -3px;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.donut-percentage-symbol {
+  font-size: 26px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.donut-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+}
+
+.score-description {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.5;
+  max-width: 260px;
+}
+
+.score-total {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+/* Right side: stat cards + compliance bar */
+.exec-right-side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Stat Cards - 5 in a row */
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  flex: 1;
+}
+
+.stat-card {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--card-hover-shadow);
+}
+
+.stat-card.pass::before { background: linear-gradient(90deg, #10b981, #34d399); }
+.stat-card.fail::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+.stat-card.warning::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.stat-card.info::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.stat-card.error::before { background: linear-gradient(90deg, #6b7280, #9ca3af); }
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.stat-card.pass .stat-icon { background: var(--color-pass-bg); color: var(--color-pass); }
+.stat-card.fail .stat-icon { background: var(--color-fail-bg); color: var(--color-fail); }
+.stat-card.warning .stat-icon { background: var(--color-warning-bg); color: var(--color-warning); }
+.stat-card.info .stat-icon { background: var(--color-info-bg); color: var(--color-info); }
+.stat-card.error .stat-icon { background: var(--color-error-bg); color: var(--color-error); }
+
+.stat-number {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1;
+}
+
+.stat-card.pass .stat-number { color: var(--color-pass); }
+.stat-card.fail .stat-number { color: var(--color-fail); }
+.stat-card.warning .stat-number { color: var(--color-warning); }
+.stat-card.info .stat-number { color: var(--color-info); }
+.stat-card.error .stat-number { color: var(--color-error); }
+
+.stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-tertiary);
+}
+
+/* Compliance Distribution Bar */
+.compliance-bar-container {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 24px;
+}
+
+.compliance-bar-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-tertiary);
+  margin-bottom: 12px;
+}
+
+.compliance-bar {
+  height: 14px;
+  border-radius: 7px;
+  display: flex;
+  overflow: hidden;
+  background: var(--donut-track);
+  gap: 2px;
+}
+
+.compliance-bar-segment {
+  height: 100%;
+  transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0;
+}
+
+.compliance-bar-segment.pass { background: linear-gradient(90deg, #10b981, #34d399); border-radius: 7px 0 0 7px; }
+.compliance-bar-segment.warning { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.compliance-bar-segment.fail { background: linear-gradient(90deg, #ef4444, #f87171); }
+.compliance-bar-segment.error { background: linear-gradient(90deg, #6b7280, #9ca3af); }
+.compliance-bar-segment.info { background: linear-gradient(90deg, #3b82f6, #60a5fa); border-radius: 0 7px 7px 0; }
+
+.compliance-bar-legend {
+  display: flex;
+  gap: 20px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.legend-dot.pass { background: var(--color-pass); }
+.legend-dot.fail { background: var(--color-fail); }
+.legend-dot.warning { background: var(--color-warning); }
+.legend-dot.info { background: var(--color-info); }
+.legend-dot.error { background: var(--color-error); }
+
+/* ============================================================
+   SECTION CARDS
+   ============================================================ */
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: color var(--transition-speed) ease;
+}
+
+.section-title .title-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.sections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 16px;
+  margin-bottom: 36px;
+}
+
+.section-card {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px;
+  transition: all 0.3s ease;
+}
+
+.section-card:hover {
+  box-shadow: var(--card-hover-shadow);
+  transform: translateY(-1px);
+}
+
+.section-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.section-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-card-name .section-icon {
+  font-size: 16px;
+  opacity: 0.7;
+}
+
+.section-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.section-pass-rate {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.section-control-count {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+/* Stacked Progress Bar */
+.progress-bar-container {
+  width: 100%;
+  height: 10px;
+  background: var(--donut-track);
+  border-radius: 5px;
+  overflow: hidden;
+  display: flex;
+  margin-bottom: 10px;
+}
+
+.progress-segment {
+  height: 100%;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0;
+}
+
+.progress-segment.pass { background: var(--color-pass); }
+.progress-segment.fail { background: var(--color-fail); }
+.progress-segment.warning { background: var(--color-warning); }
+.progress-segment.info { background: var(--color-info); }
+.progress-segment.error { background: var(--color-error); }
+
+.section-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.legend-dot.pass { background: var(--color-pass); }
+.legend-dot.fail { background: var(--color-fail); }
+.legend-dot.warning { background: var(--color-warning); }
+.legend-dot.info { background: var(--color-info); }
+.legend-dot.error { background: var(--color-error); }
+
+/* ============================================================
+   CONTROLS TABLE
+   ============================================================ */
+.table-container {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  transition: all var(--transition-speed) ease;
+}
+
+/* Toolbar */
+.table-toolbar {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.search-box {
+  flex: 1;
+  min-width: 220px;
+  position: relative;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 9px 14px 9px 38px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.search-box input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.search-box input:focus {
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+
+.search-box::before {
+  content: '\26B2';
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  color: var(--text-tertiary);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.filter-select {
+  padding: 9px 32px 9px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.filter-select:focus {
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.toolbar-btn {
+  padding: 9px 16px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover {
+  border-color: var(--color-info);
+  color: var(--color-info);
+  background: var(--color-info-bg);
+}
+
+.result-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  padding: 9px 0;
+  white-space: nowrap;
+}
+
+/* Table */
+.controls-table-wrap {
+  overflow-x: auto;
+}
+
+.controls-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.controls-table thead th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+  position: relative;
+}
+
+.controls-table thead th:hover {
+  color: var(--text-primary);
+}
+
+.controls-table thead th .sort-arrow {
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.3;
+  transition: opacity 0.2s ease;
+}
+
+.controls-table thead th.sorted-asc .sort-arrow,
+.controls-table thead th.sorted-desc .sort-arrow {
+  opacity: 1;
+  color: var(--color-info);
+}
+
+.controls-table tbody tr {
+  border-bottom: 1px solid var(--border-color-light);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.controls-table tbody tr:nth-child(even) {
+  background: var(--table-stripe);
+}
+
+.controls-table tbody tr:hover {
+  background: var(--table-hover);
+}
+
+.controls-table tbody tr.expanded {
+  background: var(--table-hover);
+}
+
+.controls-table tbody td {
+  padding: 11px 16px;
+  vertical-align: middle;
+}
+
+/* Status Badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-badge.pass {
+  background: var(--color-pass-bg);
+  color: var(--color-pass);
+  border: 1px solid var(--color-pass-border);
+}
+.status-badge.fail {
+  background: var(--color-fail-bg);
+  color: var(--color-fail);
+  border: 1px solid var(--color-fail-border);
+}
+.status-badge.warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
+}
+.status-badge.info {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border: 1px solid var(--color-info-border);
+}
+.status-badge.error {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-error-border);
+}
+
+.status-badge .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.status-badge.pass .status-dot { background: var(--color-pass); }
+.status-badge.fail .status-dot { background: var(--color-fail); }
+.status-badge.warning .status-dot { background: var(--color-warning); }
+.status-badge.info .status-dot { background: var(--color-info); }
+.status-badge.error .status-dot { background: var(--color-error); }
+
+/* Status Icon */
+.status-icon-cell {
+  width: 36px;
+  text-align: center;
+}
+
+.status-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.status-icon.pass { background: var(--color-pass); }
+.status-icon.fail { background: var(--color-fail); }
+.status-icon.warning { background: var(--color-warning); }
+.status-icon.info { background: var(--color-info); }
+.status-icon.error { background: var(--color-error); }
+
+/* Severity Dot */
+.severity-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.severity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.severity-dot.critical { background: var(--severity-critical); }
+.severity-dot.high { background: var(--severity-high); }
+.severity-dot.medium { background: var(--severity-medium); }
+.severity-dot.low { background: var(--severity-low); }
+.severity-dot.informational { background: var(--severity-informational); }
+
+/* Control ID */
+.control-id {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.control-title {
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 350px;
+}
+
+.control-section {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.profile-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+/* Row Expand Arrow */
+.expand-arrow {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-right: 6px;
+}
+
+.expanded .expand-arrow {
+  transform: rotate(90deg);
+}
+
+/* ============================================================
+   DETAIL PANEL
+   ============================================================ */
+.detail-row {
+  display: none;
+}
+
+.detail-row.visible {
+  display: table-row;
+}
+
+.detail-row td {
+  padding: 0 !important;
+  border-bottom: 2px solid var(--border-color) !important;
+}
+
+.detail-panel {
+  background: var(--detail-bg);
+  padding: 24px 32px;
+  border-top: 1px solid var(--border-color);
+  animation: slideDown 0.25s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 2000px; }
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.detail-section {
+  margin-bottom: 0;
+}
+
+.detail-section.full-width {
+  grid-column: 1 / -1;
+}
+
+.detail-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-section-content {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.detail-section-content p {
+  margin-bottom: 8px;
+}
+
+.detail-section-content p:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section-content code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--code-bg);
+  border: 1px solid var(--border-color);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.detail-section-content pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--code-bg);
+  border: 1px solid var(--border-color);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+}
+
+.resource-list {
+  list-style: none;
+  padding: 0;
+}
+
+.resource-list li {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  background: var(--code-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-bottom: 4px;
+  word-break: break-all;
+  color: var(--text-secondary);
+}
+
+.reference-links {
+  list-style: none;
+  padding: 0;
+}
+
+.reference-links li {
+  margin-bottom: 6px;
+}
+
+.reference-links a {
+  font-size: 13px;
+  color: var(--color-info);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reference-links a:hover {
+  text-decoration: underline;
+}
+
+.reference-links a::before {
+  content: '\2197';
+  font-size: 11px;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.report-footer {
+  text-align: center;
+  padding: 24px 40px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  border-top: 1px solid var(--border-color);
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: fadeInUp 0.5s ease forwards;
+  opacity: 0;
+}
+
+.animate-delay-1 { animation-delay: 0.1s; }
+.animate-delay-2 { animation-delay: 0.2s; }
+.animate-delay-3 { animation-delay: 0.3s; }
+.animate-delay-4 { animation-delay: 0.4s; }
+.animate-delay-5 { animation-delay: 0.5s; }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+/* Subscription Switcher */
+.subscription-switcher {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  padding: 16px 22px;
+}
+
+.subscription-switcher label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.subscription-switcher select {
+  flex: 1;
+  padding: 10px 36px 10px 14px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 18px;
+  transition: all 0.2s ease;
+}
+
+.subscription-switcher select:focus {
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+
+.subscription-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .exec-top-row {
+    grid-template-columns: 1fr;
+  }
+  .stat-cards {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  .sections-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 800px) {
+  .report-header { padding: 24px 20px; }
+  .main-container { padding: 20px; }
+  .header-content { flex-direction: column; }
+  .header-right { flex-direction: row; align-items: center; }
+  .stat-cards { grid-template-columns: repeat(3, 1fr); }
+  .header-meta { gap: 12px; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .table-toolbar { flex-direction: column; }
+  .search-box { min-width: 100%; }
+  .subscription-switcher { flex-direction: column; align-items: stretch; }
+}
+
+@media (max-width: 600px) {
+  .stat-cards { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ============================================================
+   PRINT STYLES
+   ============================================================ */
+@media print {
+  * { transition: none !important; animation: none !important; }
+
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11px !important;
+  }
+
+  [data-theme="dark"] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f8fafc;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-tertiary: #94a3b8;
+    --border-color: #e2e8f0;
+    --border-color-light: #f1f5f9;
+    --donut-track: #e2e8f0;
+    --detail-bg: #f8fafc;
+    --code-bg: #f1f5f9;
+    --table-stripe: #f8fafc;
+    --input-bg: #ffffff;
+    --color-pass-bg: #ecfdf5;
+    --color-pass-border: #a7f3d0;
+    --color-fail-bg: #fef2f2;
+    --color-fail-border: #fecaca;
+    --color-warning-bg: #fffbeb;
+    --color-warning-border: #fde68a;
+    --color-info-bg: #eff6ff;
+    --color-info-border: #bfdbfe;
+    --color-error-bg: #f9fafb;
+    --color-error-border: #d1d5db;
+  }
+
+  .report-header {
+    background: #0f172a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .theme-toggle,
+  .print-btn,
+  .table-toolbar,
+  .no-print {
+    display: none !important;
+  }
+
+  .main-container { padding: 16px; }
+
+  .table-container { box-shadow: none; border: 1px solid #e2e8f0; }
+
+  .detail-row { display: table-row !important; }
+  .detail-row td { padding: 0 !important; }
+  .detail-panel { display: block !important; }
+
+  .controls-table tbody tr { page-break-inside: avoid; }
+
+  .section-title { page-break-after: avoid; }
+  .sections-grid { page-break-inside: avoid; }
+
+  .stat-card { box-shadow: none; border: 1px solid #e2e8f0; }
+  .stat-card:hover { transform: none; }
+  .score-card { box-shadow: none; border: 1px solid #e2e8f0; }
+  .section-card { box-shadow: none; }
+
+  .report-footer { page-break-before: always; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     HEADER
+     ============================================================ -->
+<header class="report-header">
+  <div class="header-content">
+    <div class="header-left">
+      <div class="header-badge">
+        <span class="badge-dot"></span>
+        Compliance Report
+      </div>
+      <h1 class="header-title">CIS Microsoft Azure Foundations Benchmark {{BENCHMARK_VERSION}}</h1>
+      <p class="header-subtitle">Security compliance assessment and detailed findings report</p>
+      <div class="header-meta">
+        <div class="meta-item">
+          <span class="meta-icon">&#9729;</span>
+          <div>
+            <div class="meta-label">Subscription</div>
+            <div class="meta-value">{{SUBSCRIPTION_NAME}}</div>
+          </div>
+        </div>
+        <div class="meta-item">
+          <span class="meta-icon">&#128273;</span>
+          <div>
+            <div class="meta-label">Subscription ID</div>
+            <div class="meta-value" style="font-family: var(--font-mono); font-size: 12px;">{{SUBSCRIPTION_ID}}</div>
+          </div>
+        </div>
+        <div class="meta-item">
+          <span class="meta-icon">&#127970;</span>
+          <div>
+            <div class="meta-label">Tenant ID</div>
+            <div class="meta-value" style="font-family: var(--font-mono); font-size: 12px;">{{TENANT_ID}}</div>
+          </div>
+        </div>
+        <div class="meta-item">
+          <span class="meta-icon">&#128339;</span>
+          <div>
+            <div class="meta-label">Scanned</div>
+            <div class="meta-value" id="scanTimestamp">{{SCAN_TIMESTAMP}}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode" aria-label="Toggle theme">
+        <span class="toggle-thumb"></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================================
+     MAIN CONTENT
+     ============================================================ -->
+<main class="main-container">
+
+  <!-- Subscription Switcher (hidden if single subscription) -->
+  <div class="subscription-switcher" id="subscriptionSwitcher" style="display:none">
+    <label for="subscriptionSelect">&#9729; Subscription</label>
+    <select id="subscriptionSelect"></select>
+    <span class="subscription-count" id="subscriptionCount"></span>
+  </div>
+
+  <!-- Executive Summary -->
+  <div class="executive-summary">
+    <div class="exec-top-row">
+      <!-- Donut Chart -->
+      <div class="score-card animate-in">
+        <div class="donut-container">
+          <svg class="donut-svg" viewBox="0 0 200 200">
+            <circle class="donut-track" cx="100" cy="100" r="82" />
+            <circle class="donut-glow" id="donutGlow" cx="100" cy="100" r="82"
+              stroke-dasharray="515.22"
+              stroke-dashoffset="515.22" />
+            <circle class="donut-fill" id="donutFill" cx="100" cy="100" r="82"
+              stroke-dasharray="515.22"
+              stroke-dashoffset="515.22" />
+          </svg>
+          <div class="donut-center-text">
+            <div class="donut-percentage" id="donutPercentage">0<span class="donut-percentage-symbol">%</span></div>
+            <div class="donut-label">Compliance</div>
+          </div>
+        </div>
+        <div class="score-description">
+          Automated checks score (excludes manual and indeterminate controls).
+        </div>
+        <div class="score-total" id="scoreTotalText">
+          {{PASS_COUNT}} of {{TOTAL_CONTROLS}} controls passed
+        </div>
+      </div>
+
+      <!-- Right Side: Stat Cards + Compliance Bar -->
+      <div class="exec-right-side">
+        <!-- Stat Cards -->
+        <div class="stat-cards">
+          <div class="stat-card pass animate-in animate-delay-1">
+            <div class="stat-icon">&#10003;</div>
+            <div class="stat-number" id="statPass">{{PASS_COUNT}}</div>
+            <div class="stat-label">Passed</div>
+          </div>
+          <div class="stat-card fail animate-in animate-delay-2">
+            <div class="stat-icon">&#10007;</div>
+            <div class="stat-number" id="statFail">{{FAIL_COUNT}}</div>
+            <div class="stat-label">Failed</div>
+          </div>
+          <div class="stat-card warning animate-in animate-delay-3">
+            <div class="stat-icon">&#9888;</div>
+            <div class="stat-number" id="statWarning">{{WARNING_COUNT}}</div>
+            <div class="stat-label">Warning</div>
+          </div>
+          <div class="stat-card info animate-in animate-delay-4">
+            <div class="stat-icon">&#8505;</div>
+            <div class="stat-number" id="statInfo">{{INFO_COUNT}}</div>
+            <div class="stat-label">Manual</div>
+          </div>
+          <div class="stat-card error animate-in animate-delay-5">
+            <div class="stat-icon">&#9679;</div>
+            <div class="stat-number" id="statError">{{ERROR_COUNT}}</div>
+            <div class="stat-label">Error</div>
+          </div>
+        </div>
+
+        <!-- Compliance Distribution Bar -->
+        <div class="compliance-bar-container">
+          <div class="compliance-bar-label">Compliance Distribution</div>
+          <div class="compliance-bar" id="complianceBar">
+            <div class="compliance-bar-segment pass" id="barPass" style="width:0%"></div>
+            <div class="compliance-bar-segment fail" id="barFail" style="width:0%"></div>
+            <div class="compliance-bar-segment warning" id="barWarning" style="width:0%"></div>
+            <div class="compliance-bar-segment error" id="barError" style="width:0%"></div>
+            <div class="compliance-bar-segment info" id="barInfo" style="width:0%"></div>
+          </div>
+          <div class="compliance-bar-legend" id="complianceLegend"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section Breakdown -->
+  <div class="section-title">
+    <span class="title-icon">&#9638;</span>
+    Section Breakdown
+  </div>
+  <div class="sections-grid" id="sectionsGrid">
+    <!-- Dynamically populated by JavaScript -->
+  </div>
+
+  <!-- Controls Table -->
+  <div class="section-title">
+    <span class="title-icon">&#9776;</span>
+    Detailed Controls
+  </div>
+  <div class="table-container">
+    <div class="table-toolbar no-print">
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Search controls by ID, title, section..." />
+      </div>
+      <select class="filter-select" id="filterStatus">
+        <option value="">All Statuses</option>
+        <option value="PASS">Pass</option>
+        <option value="FAIL">Fail</option>
+        <option value="WARNING">Warning</option>
+        <option value="INFO">Info / Manual</option>
+        <option value="ERROR">Error</option>
+      </select>
+      <select class="filter-select" id="filterSection">
+        <option value="">All Sections</option>
+      </select>
+      <select class="filter-select" id="filterSeverity">
+        <option value="">All Severities</option>
+        <option value="Critical">Critical</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+        <option value="Informational">Informational</option>
+      </select>
+      <select class="filter-select" id="filterProfile">
+        <option value="">All Levels</option>
+        <option value="1">Level 1</option>
+        <option value="2">Level 2</option>
+      </select>
+      <div class="toolbar-actions">
+        <button class="toolbar-btn" id="expandAllBtn">Expand All</button>
+        <button class="toolbar-btn" id="collapseAllBtn">Collapse All</button>
+      </div>
+      <span class="result-count" id="resultCount"></span>
+    </div>
+    <div class="controls-table-wrap">
+      <table class="controls-table">
+        <thead>
+          <tr>
+            <th style="width:36px"></th>
+            <th data-sort="controlId">ID <span class="sort-arrow">&#9650;</span></th>
+            <th data-sort="title">Title <span class="sort-arrow">&#9650;</span></th>
+            <th data-sort="status">Status <span class="sort-arrow">&#9650;</span></th>
+            <th data-sort="severity">Severity <span class="sort-arrow">&#9650;</span></th>
+            <th data-sort="section">Section <span class="sort-arrow">&#9650;</span></th>
+            <th data-sort="profileLevel">Level <span class="sort-arrow">&#9650;</span></th>
+          </tr>
+        </thead>
+        <tbody id="controlsTableBody">
+          <!-- Dynamically populated by JavaScript -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- Footer -->
+<footer class="report-footer">
+  CIS Microsoft Azure Foundations Benchmark {{BENCHMARK_VERSION}} &mdash;
+  Report generated on <span id="footerTimestamp">{{SCAN_TIMESTAMP}}</span>
+  &mdash; This report is intended for authorized personnel only.
+</footer>
+
+<!-- ============================================================
+     EMBEDDED REPORT DATA
+     ============================================================ -->
+<script>
+// Multi-subscription data: { subscriptionId: { name, id, tenantId, score, results: [...] }, ... }
+// Falls back to single-subscription if MULTI_SUB_DATA is empty
+var REPORT_DATA = {{REPORT_DATA}};
+var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
+</script>
+
+<!-- ============================================================
+     APPLICATION JAVASCRIPT
+     ============================================================ -->
+<script>
+(function() {
+  'use strict';
+
+  /* ===========================================================
+     UTILITY HELPERS
+     =========================================================== */
+  function escapeHtml(str) {
+    if (str == null) return '';
+    var s = String(str);
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function debounce(fn, delay) {
+    var timer;
+    return function() {
+      var context = this, args = arguments;
+      clearTimeout(timer);
+      timer = setTimeout(function() { fn.apply(context, args); }, delay);
+    };
+  }
+
+  function formatTimestamp(iso) {
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleString(undefined, {
+        year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+    } catch(e) { return iso; }
+  }
+
+  function getScoreColor(pct) {
+    if (pct <= 50) {
+      var r = 239;
+      var g = Math.round(68 + (pct / 50) * (158 - 68));
+      var b = Math.round(68 + (pct / 50) * (11 - 68));
+      return 'rgb(' + r + ',' + g + ',' + b + ')';
+    } else {
+      var t = (pct - 50) / 50;
+      var r = Math.round(245 - t * (245 - 16));
+      var g = Math.round(158 + t * (185 - 158));
+      var b = Math.round(11 + t * (129 - 11));
+      return 'rgb(' + r + ',' + g + ',' + b + ')';
+    }
+  }
+
+  function getStatusClass(status) {
+    var st = (status || '').toUpperCase();
+    if (st === 'PASS') return 'pass';
+    if (st === 'FAIL') return 'fail';
+    if (st === 'WARNING') return 'warning';
+    if (st === 'INFO' || st === 'MANUAL') return 'info';
+    if (st === 'ERROR') return 'error';
+    return 'error';
+  }
+
+  function getStatusIcon(status) {
+    var st = (status || '').toUpperCase();
+    if (st === 'PASS') return '&#10003;';
+    if (st === 'FAIL') return '&#10007;';
+    if (st === 'WARNING') return '!';
+    if (st === 'INFO' || st === 'MANUAL') return 'i';
+    if (st === 'ERROR') return '&#9679;';
+    return '?';
+  }
+
+  function getSeverityClass(sev) {
+    var s = (sev || '').toLowerCase();
+    if (s === 'critical') return 'critical';
+    if (s === 'high') return 'high';
+    if (s === 'medium') return 'medium';
+    if (s === 'low') return 'low';
+    return 'informational';
+  }
+
+  var sectionIcons = {
+    'Identity': '\u{1F464}', 'Security': '\u{1F6E1}', 'Storage': '\u{1F4E6}',
+    'Networking': '\u{1F310}', 'Compute': '\u{1F5A5}', 'Analytics': '\u{1F4CA}',
+    'Management': '\u{2699}', 'Database': '\u{1F4BE}', 'Logging': '\u{1F4DD}',
+    'Monitoring': '\u{1F50D}', 'AppService': '\u{1F310}', 'KeyVault': '\u{1F511}'
+  };
+
+  function getSectionIcon(name) {
+    for (var key in sectionIcons) {
+      if (name && name.toLowerCase().indexOf(key.toLowerCase()) !== -1) return sectionIcons[key];
+    }
+    return '\u{1F4CB}';
+  }
+
+  function computeStats(results) {
+    var s = { pass:0, fail:0, warning:0, info:0, error:0, total: results.length };
+    results.forEach(function(item) {
+      var st = (item.Status || item.status || '').toUpperCase();
+      if (st === 'PASS') s.pass++;
+      else if (st === 'FAIL') s.fail++;
+      else if (st === 'WARNING') s.warning++;
+      else if (st === 'INFO' || st === 'MANUAL') s.info++;
+      else if (st === 'ERROR') s.error++;
+    });
+    var denom = s.total - s.info - s.warning;
+    s.score = denom > 0 ? Math.round((s.pass / denom) * 1000) / 10 : 0;
+    return s;
+  }
+
+  /* ===========================================================
+     THEME TOGGLE
+     =========================================================== */
+  var themeToggle = document.getElementById('themeToggle');
+  var savedTheme = null;
+  try { savedTheme = localStorage.getItem('cis-report-theme'); } catch(e) {}
+  if (savedTheme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+
+  themeToggle.addEventListener('click', function() {
+    var current = document.documentElement.getAttribute('data-theme');
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('cis-report-theme', next); } catch(e) {}
+  });
+
+  /* ===========================================================
+     FORMAT SCAN TIMESTAMP
+     =========================================================== */
+  var rawTimestamp = '{{SCAN_TIMESTAMP}}';
+  var formattedTs = formatTimestamp(rawTimestamp);
+  var tsEl = document.getElementById('scanTimestamp');
+  if (tsEl) tsEl.textContent = formattedTs;
+  var footerTs = document.getElementById('footerTimestamp');
+  if (footerTs) footerTs.textContent = formattedTs;
+
+  /* ===========================================================
+     DETECT MULTI-SUBSCRIPTION DATA
+     =========================================================== */
+  var multiSubData = null;
+  var subKeys = [];
+  try {
+    if (MULTI_SUB_DATA && typeof MULTI_SUB_DATA === 'object' && !Array.isArray(MULTI_SUB_DATA)) {
+      subKeys = Object.keys(MULTI_SUB_DATA);
+      if (subKeys.length > 0) multiSubData = MULTI_SUB_DATA;
+    }
+  } catch(e) {}
+
+  // Determine initial data
+  var data = [];
+  try {
+    if (Array.isArray(REPORT_DATA)) data = REPORT_DATA;
+  } catch(e) {}
+
+  // Current active subscription data reference
+  var activeData = data;
+
+  /* ===========================================================
+     SUBSCRIPTION SWITCHER
+     =========================================================== */
+  var subSwitcher = document.getElementById('subscriptionSwitcher');
+  var subSelect = document.getElementById('subscriptionSelect');
+  var subCount = document.getElementById('subscriptionCount');
+
+  if (multiSubData && subKeys.length > 1) {
+    subSwitcher.style.display = '';
+    subCount.textContent = subKeys.length + ' subscriptions scanned';
+
+    subKeys.forEach(function(key) {
+      var sub = multiSubData[key];
+      var opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = (sub.name || key) + ' (' + key + ')';
+      subSelect.appendChild(opt);
+    });
+
+    // Also add "All Subscriptions" option at top
+    var allOpt = document.createElement('option');
+    allOpt.value = '__ALL__';
+    allOpt.textContent = 'All Subscriptions (Combined)';
+    subSelect.insertBefore(allOpt, subSelect.firstChild);
+    subSelect.value = '__ALL__';
+
+    subSelect.addEventListener('change', function() {
+      switchSubscription(subSelect.value);
+    });
+  }
+
+  function switchSubscription(subId) {
+    var newData;
+    if (subId === '__ALL__' || !multiSubData) {
+      newData = data; // combined data
+    } else {
+      newData = multiSubData[subId] ? multiSubData[subId].results : data;
+    }
+    activeData = newData;
+    rebuildDashboard(newData);
+  }
+
+  /* ===========================================================
+     DONUT CHART
+     =========================================================== */
+  var circumference = 2 * Math.PI * 82;
+  var donutFill = document.getElementById('donutFill');
+  var donutGlow = document.getElementById('donutGlow');
+  var donutPercentage = document.getElementById('donutPercentage');
+
+  function updateDonut(score, animate) {
+    var fillLength = (score / 100) * circumference;
+    var offset = circumference - fillLength;
+    var color = getScoreColor(score);
+
+    donutFill.setAttribute('stroke', color);
+    if (donutGlow) donutGlow.setAttribute('stroke', color);
+
+    if (animate) {
+      requestAnimationFrame(function() {
+        donutFill.style.strokeDashoffset = offset;
+        if (donutGlow) donutGlow.style.strokeDashoffset = offset;
+      });
+
+      // Animate number
+      var duration = 1500;
+      var startTime = null;
+      function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        var progress = Math.min((timestamp - startTime) / duration, 1);
+        var eased = 1 - Math.pow(1 - progress, 3);
+        var current = Math.round(eased * score * 10) / 10;
+        donutPercentage.innerHTML = Math.round(current) + '<span class="donut-percentage-symbol">%</span>';
+        if (progress < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    } else {
+      donutFill.style.strokeDashoffset = offset;
+      if (donutGlow) donutGlow.style.strokeDashoffset = offset;
+      donutPercentage.innerHTML = Math.round(score) + '<span class="donut-percentage-symbol">%</span>';
+    }
+  }
+
+  /* ===========================================================
+     UPDATE STAT CARDS & COMPLIANCE BAR
+     =========================================================== */
+  function updateStatCards(stats) {
+    var el;
+    el = document.getElementById('statPass'); if (el) el.textContent = stats.pass;
+    el = document.getElementById('statFail'); if (el) el.textContent = stats.fail;
+    el = document.getElementById('statWarning'); if (el) el.textContent = stats.warning;
+    el = document.getElementById('statInfo'); if (el) el.textContent = stats.info;
+    el = document.getElementById('statError'); if (el) el.textContent = stats.error;
+
+    el = document.getElementById('scoreTotalText');
+    if (el) el.textContent = stats.pass + ' of ' + stats.total + ' controls passed';
+  }
+
+  function updateComplianceBar(stats) {
+    var total = stats.total || 1;
+    var bp = document.getElementById('barPass');
+    var bf = document.getElementById('barFail');
+    var bw = document.getElementById('barWarning');
+    var be = document.getElementById('barError');
+    var bi = document.getElementById('barInfo');
+
+    if (bp) bp.style.width = (stats.pass / total * 100) + '%';
+    if (bf) bf.style.width = (stats.fail / total * 100) + '%';
+    if (bw) bw.style.width = (stats.warning / total * 100) + '%';
+    if (be) be.style.width = (stats.error / total * 100) + '%';
+    if (bi) bi.style.width = (stats.info / total * 100) + '%';
+
+    var legend = document.getElementById('complianceLegend');
+    if (legend) {
+      legend.innerHTML = '';
+      var items = [
+        { cls: 'pass', label: 'Pass', count: stats.pass },
+        { cls: 'fail', label: 'Fail', count: stats.fail },
+        { cls: 'warning', label: 'Warning', count: stats.warning },
+        { cls: 'error', label: 'Error', count: stats.error },
+        { cls: 'info', label: 'Manual/Info', count: stats.info }
+      ];
+      items.forEach(function(it) {
+        if (it.count > 0) {
+          var span = document.createElement('span');
+          span.className = 'legend-item';
+          span.innerHTML = '<span class="legend-dot ' + it.cls + '"></span>' + it.count + ' ' + it.label;
+          legend.appendChild(span);
+        }
+      });
+    }
+  }
+
+  /* ===========================================================
+     BUILD SECTION CARDS
+     =========================================================== */
+  var sectionsGrid = document.getElementById('sectionsGrid');
+  var filterSectionEl = document.getElementById('filterSection');
+
+  function buildSectionCards(results) {
+    sectionsGrid.innerHTML = '';
+    // Clear section filter options (keep first "All Sections")
+    while (filterSectionEl.options.length > 1) filterSectionEl.remove(1);
+
+    var sectionMap = {};
+    results.forEach(function(item) {
+      var sec = item.Section || item.section || 'Other';
+      if (!sectionMap[sec]) sectionMap[sec] = { pass:0, fail:0, warning:0, info:0, error:0, total:0 };
+      var st = (item.Status || item.status || '').toUpperCase();
+      sectionMap[sec].total++;
+      if (st === 'PASS') sectionMap[sec].pass++;
+      else if (st === 'FAIL') sectionMap[sec].fail++;
+      else if (st === 'WARNING') sectionMap[sec].warning++;
+      else if (st === 'INFO' || st === 'MANUAL') sectionMap[sec].info++;
+      else if (st === 'ERROR') sectionMap[sec].error++;
+    });
+
+    var sectionNames = Object.keys(sectionMap).sort();
+    sectionNames.forEach(function(name) {
+      var opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      filterSectionEl.appendChild(opt);
+    });
+
+    sectionNames.forEach(function(name, idx) {
+      var s = sectionMap[name];
+      var passRate = s.total > 0 ? Math.round((s.pass / s.total) * 100) : 0;
+      var prColor = getScoreColor(passRate);
+      var card = document.createElement('div');
+      card.className = 'section-card animate-in';
+      card.style.animationDelay = (0.05 * idx) + 's';
+
+      var passW = s.total > 0 ? (s.pass / s.total * 100) : 0;
+      var failW = s.total > 0 ? (s.fail / s.total * 100) : 0;
+      var warnW = s.total > 0 ? (s.warning / s.total * 100) : 0;
+      var infoW = s.total > 0 ? (s.info / s.total * 100) : 0;
+      var errorW = s.total > 0 ? (s.error / s.total * 100) : 0;
+
+      card.innerHTML =
+        '<div class="section-card-header">' +
+          '<span class="section-card-name"><span class="section-icon">' + getSectionIcon(name) + '</span>' + escapeHtml(name) + '</span>' +
+          '<div class="section-card-stats">' +
+            '<span class="section-pass-rate" style="color:' + prColor + '">' + passRate + '%</span>' +
+            '<span class="section-control-count">' + s.total + ' controls</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="progress-bar-container">' +
+          '<div class="progress-segment pass" style="width:' + passW + '%"></div>' +
+          '<div class="progress-segment fail" style="width:' + failW + '%"></div>' +
+          '<div class="progress-segment warning" style="width:' + warnW + '%"></div>' +
+          '<div class="progress-segment info" style="width:' + infoW + '%"></div>' +
+          '<div class="progress-segment error" style="width:' + errorW + '%"></div>' +
+        '</div>' +
+        '<div class="section-legend">' +
+          (s.pass > 0 ? '<span class="legend-item"><span class="legend-dot pass"></span>' + s.pass + ' Pass</span>' : '') +
+          (s.fail > 0 ? '<span class="legend-item"><span class="legend-dot fail"></span>' + s.fail + ' Fail</span>' : '') +
+          (s.warning > 0 ? '<span class="legend-item"><span class="legend-dot warning"></span>' + s.warning + ' Warn</span>' : '') +
+          (s.info > 0 ? '<span class="legend-item"><span class="legend-dot info"></span>' + s.info + ' Info</span>' : '') +
+          (s.error > 0 ? '<span class="legend-item"><span class="legend-dot error"></span>' + s.error + ' Error</span>' : '') +
+        '</div>';
+      sectionsGrid.appendChild(card);
+    });
+  }
+
+  /* ===========================================================
+     BUILD TABLE ROWS
+     =========================================================== */
+  var tableBody = document.getElementById('controlsTableBody');
+  var allRows = [];
+
+  function buildResourceList(resources) {
+    if (!resources) return '<p style="color:var(--text-tertiary); font-style:italic;">No specific resources identified.</p>';
+    var arr = [];
+    if (Array.isArray(resources)) arr = resources;
+    else if (typeof resources === 'string') arr = resources.split(/[;\n]/).map(function(s) { return s.trim(); }).filter(Boolean);
+    if (arr.length === 0) return '<p style="color:var(--text-tertiary); font-style:italic;">No specific resources identified.</p>';
+    var html = '<ul class="resource-list">';
+    arr.forEach(function(r) { html += '<li>' + escapeHtml(r) + '</li>'; });
+    html += '</ul>';
+    return html;
+  }
+
+  function buildReferenceLinks(refs) {
+    if (!refs) return '<p style="color:var(--text-tertiary); font-style:italic;">No references available.</p>';
+    var arr = [];
+    if (Array.isArray(refs)) arr = refs;
+    else if (typeof refs === 'string') arr = refs.split(/[;\n]/).map(function(s) { return s.trim(); }).filter(Boolean);
+    if (arr.length === 0) return '<p style="color:var(--text-tertiary); font-style:italic;">No references available.</p>';
+    var html = '<ul class="reference-links">';
+    arr.forEach(function(r) {
+      if (typeof r === 'object' && r.url) {
+        html += '<li><a href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener">' + escapeHtml(r.title || r.url) + '</a></li>';
+      } else {
+        var url = String(r);
+        if (url.match(/^https?:\/\//i)) {
+          html += '<li><a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + escapeHtml(url) + '</a></li>';
+        } else {
+          html += '<li>' + escapeHtml(url) + '</li>';
+        }
+      }
+    });
+    html += '</ul>';
+    return html;
+  }
+
+  function buildDetailPanel(item) {
+    var desc = item.Description || item.description || '';
+    var details = item.Details || item.details || item.Findings || '';
+    var remediation = item.Remediation || item.remediation || '';
+    var resources = item.AffectedResources || item.affectedResources || null;
+    var refs = item.References || item.references || null;
+
+    if (typeof details === 'object' && details !== null) {
+      try { details = JSON.stringify(details, null, 2); } catch(e) { details = String(details); }
+    }
+
+    return '<div class="detail-panel">' +
+      '<div class="detail-grid">' +
+        '<div class="detail-section full-width">' +
+          '<div class="detail-section-title">&#128196; Description</div>' +
+          '<div class="detail-section-content">' +
+            (desc ? '<p>' + escapeHtml(desc) + '</p>' : '<p style="color:var(--text-tertiary); font-style:italic;">No description available.</p>') +
+          '</div>' +
+        '</div>' +
+        '<div class="detail-section full-width">' +
+          '<div class="detail-section-title">&#128269; Details / Findings</div>' +
+          '<div class="detail-section-content">' +
+            (details ? '<pre>' + escapeHtml(details) + '</pre>' : '<p style="color:var(--text-tertiary); font-style:italic;">No additional details.</p>') +
+          '</div>' +
+        '</div>' +
+        '<div class="detail-section full-width">' +
+          '<div class="detail-section-title">&#128295; Remediation</div>' +
+          '<div class="detail-section-content">' +
+            (remediation ? '<p>' + escapeHtml(remediation) + '</p>' : '<p style="color:var(--text-tertiary); font-style:italic;">No remediation steps available.</p>') +
+          '</div>' +
+        '</div>' +
+        '<div class="detail-section">' +
+          '<div class="detail-section-title">&#127919; Affected Resources</div>' +
+          '<div class="detail-section-content">' + buildResourceList(resources) + '</div>' +
+        '</div>' +
+        '<div class="detail-section">' +
+          '<div class="detail-section-title">&#128279; References</div>' +
+          '<div class="detail-section-content">' + buildReferenceLinks(refs) + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function buildTableRows(results) {
+    tableBody.innerHTML = '';
+    allRows = [];
+
+    results.forEach(function(item) {
+      var controlId = item.ControlId || item.controlId || '';
+      var title = item.Title || item.title || '';
+      var status = item.Status || item.status || '';
+      var severity = item.Severity || item.severity || 'Informational';
+      var section = item.Section || item.section || '';
+      var profileLevel = item.ProfileLevel || item.profileLevel || '';
+      var statusCls = getStatusClass(status);
+      var sevCls = getSeverityClass(severity);
+
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-control', controlId);
+      tr.innerHTML =
+        '<td class="status-icon-cell"><span class="status-icon ' + statusCls + '">' + getStatusIcon(status) + '</span></td>' +
+        '<td><span class="expand-arrow">&#9654;</span><span class="control-id">' + escapeHtml(controlId) + '</span></td>' +
+        '<td><span class="control-title">' + escapeHtml(title) + '</span></td>' +
+        '<td><span class="status-badge ' + statusCls + '"><span class="status-dot"></span>' + escapeHtml(status) + '</span></td>' +
+        '<td><span class="severity-indicator"><span class="severity-dot ' + sevCls + '"></span>' + escapeHtml(severity) + '</span></td>' +
+        '<td><span class="control-section">' + escapeHtml(section) + '</span></td>' +
+        '<td><span class="profile-level">' + escapeHtml(String(profileLevel)) + '</span></td>';
+
+      var detailTr = document.createElement('tr');
+      detailTr.className = 'detail-row';
+      var detailTd = document.createElement('td');
+      detailTd.setAttribute('colspan', '7');
+      detailTd.innerHTML = buildDetailPanel(item);
+      detailTr.appendChild(detailTd);
+
+      tableBody.appendChild(tr);
+      tableBody.appendChild(detailTr);
+
+      var rowData = {
+        dataItem: item,
+        mainTr: tr,
+        detailTr: detailTr,
+        controlId: controlId.toLowerCase(),
+        title: title.toLowerCase(),
+        status: status.toUpperCase(),
+        severity: severity,
+        section: section,
+        profileLevel: String(profileLevel),
+        expanded: false
+      };
+
+      tr.addEventListener('click', function() {
+        rowData.expanded = !rowData.expanded;
+        if (rowData.expanded) {
+          rowData.mainTr.classList.add('expanded');
+          rowData.detailTr.classList.add('visible');
+        } else {
+          rowData.mainTr.classList.remove('expanded');
+          rowData.detailTr.classList.remove('visible');
+        }
+      });
+
+      allRows.push(rowData);
+    });
+  }
+
+  /* ===========================================================
+     REBUILD ENTIRE DASHBOARD (for subscription switching)
+     =========================================================== */
+  function rebuildDashboard(results) {
+    var stats = computeStats(results);
+    updateDonut(stats.score, false);
+    updateStatCards(stats);
+    updateComplianceBar(stats);
+    buildSectionCards(results);
+    buildTableRows(results);
+    applyFilters();
+  }
+
+  /* ===========================================================
+     INITIAL RENDER
+     =========================================================== */
+  var initStats = computeStats(data);
+  updateStatCards(initStats);
+  updateComplianceBar(initStats);
+  buildSectionCards(data);
+  buildTableRows(data);
+
+  // Animate donut on first load
+  setTimeout(function() { updateDonut(initStats.score, true); }, 200);
+
+  /* ===========================================================
+     EXPAND ALL / COLLAPSE ALL
+     =========================================================== */
+  document.getElementById('expandAllBtn').addEventListener('click', function() {
+    allRows.forEach(function(rowData) {
+      if (rowData.mainTr.style.display !== 'none') {
+        rowData.expanded = true;
+        rowData.mainTr.classList.add('expanded');
+        rowData.detailTr.classList.add('visible');
+      }
+    });
+  });
+
+  document.getElementById('collapseAllBtn').addEventListener('click', function() {
+    allRows.forEach(function(rowData) {
+      rowData.expanded = false;
+      rowData.mainTr.classList.remove('expanded');
+      rowData.detailTr.classList.remove('visible');
+    });
+  });
+
+  /* ===========================================================
+     SEARCH & FILTER
+     =========================================================== */
+  var searchInput = document.getElementById('searchInput');
+  var filterStatus = document.getElementById('filterStatus');
+  var filterSection = document.getElementById('filterSection');
+  var filterSeverity = document.getElementById('filterSeverity');
+  var filterProfile = document.getElementById('filterProfile');
+  var resultCount = document.getElementById('resultCount');
+
+  function applyFilters() {
+    var query = searchInput.value.toLowerCase().trim();
+    var statusFilter = filterStatus.value;
+    var sectionFilter = filterSection.value;
+    var severityFilter = filterSeverity.value;
+    var profileFilter = filterProfile.value;
+    var visible = 0;
+
+    allRows.forEach(function(rowData) {
+      var show = true;
+
+      if (query) {
+        var match = rowData.controlId.indexOf(query) !== -1 ||
+                    rowData.title.indexOf(query) !== -1 ||
+                    rowData.section.toLowerCase().indexOf(query) !== -1 ||
+                    rowData.severity.toLowerCase().indexOf(query) !== -1 ||
+                    rowData.status.toLowerCase().indexOf(query) !== -1;
+        if (!match) show = false;
+      }
+
+      if (statusFilter && show) {
+        if (statusFilter === 'INFO') {
+          show = rowData.status === 'INFO' || rowData.status === 'MANUAL';
+        } else {
+          show = rowData.status === statusFilter;
+        }
+      }
+
+      if (sectionFilter && show) show = rowData.section === sectionFilter;
+      if (severityFilter && show) show = rowData.severity.toLowerCase() === severityFilter.toLowerCase();
+      if (profileFilter && show) show = rowData.profileLevel === profileFilter;
+
+      rowData.mainTr.style.display = show ? '' : 'none';
+      rowData.detailTr.style.display = show && rowData.expanded ? '' : 'none';
+      if (show && rowData.expanded) rowData.detailTr.classList.add('visible');
+      else rowData.detailTr.classList.remove('visible');
+
+      if (show) visible++;
+    });
+
+    resultCount.textContent = visible + ' of ' + allRows.length + ' controls';
+  }
+
+  searchInput.addEventListener('input', debounce(applyFilters, 200));
+  filterStatus.addEventListener('change', applyFilters);
+  filterSection.addEventListener('change', applyFilters);
+  filterSeverity.addEventListener('change', applyFilters);
+  filterProfile.addEventListener('change', applyFilters);
+
+  applyFilters();
+
+  /* ===========================================================
+     COLUMN SORTING
+     =========================================================== */
+  var sortState = { column: null, direction: 'asc' };
+  var headers = document.querySelectorAll('.controls-table thead th[data-sort]');
+
+  function sortRows(column, direction) {
+    var getValue = function(rowData) {
+      switch(column) {
+        case 'controlId': return rowData.controlId;
+        case 'title': return rowData.title;
+        case 'status': return rowData.status;
+        case 'severity':
+          var order = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'informational': 4 };
+          return order[rowData.severity.toLowerCase()] !== undefined ? order[rowData.severity.toLowerCase()] : 5;
+        case 'section': return rowData.section.toLowerCase();
+        case 'profileLevel': return parseInt(rowData.profileLevel) || 0;
+        default: return '';
+      }
+    };
+
+    allRows.sort(function(a, b) {
+      var aVal = getValue(a);
+      var bVal = getValue(b);
+      var cmp = 0;
+      if (typeof aVal === 'number' && typeof bVal === 'number') cmp = aVal - bVal;
+      else cmp = String(aVal).localeCompare(String(bVal));
+      return direction === 'desc' ? -cmp : cmp;
+    });
+
+    allRows.forEach(function(rowData) {
+      tableBody.appendChild(rowData.mainTr);
+      tableBody.appendChild(rowData.detailTr);
+    });
+  }
+
+  headers.forEach(function(th) {
+    th.addEventListener('click', function() {
+      var col = th.getAttribute('data-sort');
+      headers.forEach(function(h) { h.classList.remove('sorted-asc', 'sorted-desc'); });
+
+      if (sortState.column === col) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortState.column = col;
+        sortState.direction = 'asc';
+      }
+
+      th.classList.add(sortState.direction === 'asc' ? 'sorted-asc' : 'sorted-desc');
+      var arrow = th.querySelector('.sort-arrow');
+      if (arrow) arrow.innerHTML = sortState.direction === 'asc' ? '&#9650;' : '&#9660;';
+      sortRows(sortState.column, sortState.direction);
+    });
+  });
+
+})();
+</script>
+
+</body>
+</html>

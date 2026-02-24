@@ -1,0 +1,29 @@
+# Generated compliance reports (contain sensitive subscription/tenant data)
+reports/
+*.html
+!CISAzureBenchmark/Data/HtmlTemplate.html
+
+# PowerShell module artifacts
+*.nupkg
+
+# IDE / Editor
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Claude Code local settings
+.claude/
+
+# CIS benchmark source documents (copyrighted - do not distribute)
+CIS_*.pdf
+CIS_*.txt
