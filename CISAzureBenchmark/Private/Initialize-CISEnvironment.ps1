@@ -1,3 +1,41 @@
+function Install-CISRequiredModule {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ModuleName,
+
+        [Parameter()]
+        [string]$MinimumVersion
+    )
+
+    $installed = Get-Module -ListAvailable -Name $ModuleName -ErrorAction SilentlyContinue
+    if ($MinimumVersion) {
+        $installed = $installed | Where-Object { $_.Version -ge [version]$MinimumVersion }
+    }
+
+    if ($installed) { return $true }
+
+    Write-Host "  Required module '$ModuleName' not found. Installing..." -ForegroundColor Yellow
+    try {
+        $installParams = @{
+            Name               = $ModuleName
+            Scope              = 'CurrentUser'
+            Force              = $true
+            AllowClobber       = $true
+            SkipPublisherCheck = $true
+            ErrorAction        = 'Stop'
+        }
+        if ($MinimumVersion) { $installParams.MinimumVersion = $MinimumVersion }
+        Install-Module @installParams
+        Write-Host "  Installed '$ModuleName' successfully." -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Warning "  Failed to install '$ModuleName': $($_.Exception.Message)"
+        return $false
+    }
+}
+
 function Initialize-CISEnvironment {
     [CmdletBinding()]
     param(
@@ -32,7 +70,51 @@ function Initialize-CISEnvironment {
     }).Count -gt 0
 
     if (-not $SkipModuleCheck) {
-        # Check Az module
+        # --- Check and install required modules ---
+        Write-Host "`n  Checking required modules..." -ForegroundColor Cyan
+
+        $requiredAzModules = @(
+            @{ Name = 'Az.Accounts';   MinVersion = '2.0.0' }
+            @{ Name = 'Az.Security';   MinVersion = '1.0.0' }
+            @{ Name = 'Az.Network';    MinVersion = '4.0.0' }
+            @{ Name = 'Az.Storage';    MinVersion = '4.0.0' }
+            @{ Name = 'Az.KeyVault';   MinVersion = '4.0.0' }
+            @{ Name = 'Az.Monitor';    MinVersion = '3.0.0' }
+            @{ Name = 'Az.Resources';  MinVersion = '5.0.0' }
+            @{ Name = 'Az.Websites';   MinVersion = '2.0.0' }
+            @{ Name = 'Az.Databricks'; MinVersion = '1.0.0' }
+        )
+
+        $graphModules = @(
+            @{ Name = 'Microsoft.Graph.Authentication'; MinVersion = '' }
+            @{ Name = 'Microsoft.Graph.Identity.SignIns'; MinVersion = '' }
+            @{ Name = 'Microsoft.Graph.Users'; MinVersion = '' }
+        )
+
+        $allInstalled = $true
+        foreach ($mod in $requiredAzModules) {
+            if (-not (Install-CISRequiredModule -ModuleName $mod.Name -MinimumVersion $mod.MinVersion)) {
+                $envInfo.Errors += "Required module '$($mod.Name)' is not installed and could not be auto-installed. Run: Install-Module $($mod.Name) -Scope CurrentUser"
+                $allInstalled = $false
+            }
+        }
+
+        if ($envInfo.NeedsGraph) {
+            foreach ($mod in $graphModules) {
+                if (-not (Install-CISRequiredModule -ModuleName $mod.Name -MinimumVersion $mod.MinVersion)) {
+                    $envInfo.Warnings += "Graph module '$($mod.Name)' is not installed. Identity checks (Section 5) may fail. Run: Install-Module $($mod.Name) -Scope CurrentUser"
+                }
+            }
+        }
+
+        if (-not $allInstalled) {
+            $envInfo.IsValid = $false
+            return $envInfo
+        }
+
+        Write-Host "  All required modules are available." -ForegroundColor Green
+
+        # --- Check Azure connection ---
         $azContext = $null
         try {
             $azContext = Get-AzContext -ErrorAction Stop
@@ -58,7 +140,7 @@ function Initialize-CISEnvironment {
             $envInfo.TenantId         = $azContext.Tenant.Id
         }
 
-        # Check Graph module if needed
+        # --- Check Graph connection if needed ---
         if ($envInfo.NeedsGraph) {
             try {
                 $graphContext = Get-MgContext -ErrorAction Stop
