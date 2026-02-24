@@ -1764,7 +1764,7 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
       else if (st === 'ERROR') s.error++;
     });
     var denom = s.total - s.info - s.warning;
-    s.score = denom > 0 ? Math.round((s.pass / denom) * 1000) / 10 : 0;
+    s.score = denom > 0 ? Math.round((s.pass / denom) * 1000) / 10 : -1;
     return s;
   }
 
@@ -1867,6 +1867,16 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
   var donutPercentage = document.getElementById('donutPercentage');
 
   function updateDonut(score, animate) {
+    // Handle N/A score (-1 = no evaluated controls)
+    if (score < 0) {
+      donutFill.style.strokeDashoffset = circumference;
+      if (donutGlow) donutGlow.style.strokeDashoffset = circumference;
+      donutFill.setAttribute('stroke', '#6b7280');
+      if (donutGlow) donutGlow.setAttribute('stroke', '#6b7280');
+      donutPercentage.innerHTML = 'N/A';
+      return;
+    }
+
     var fillLength = (score / 100) * circumference;
     var offset = circumference - fillLength;
     var color = getScoreColor(score);

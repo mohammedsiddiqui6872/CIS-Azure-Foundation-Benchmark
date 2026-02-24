@@ -38,9 +38,10 @@ function Test-FlowLogRetention {
                 -TotalResources 0 -PassedResources 0 -FailedResources 0
         }
 
-        $totalCount  = 0
-        $failedList  = [System.Collections.Generic.List[string]]::new()
-        $passedCount = 0
+        $totalCount    = 0
+        $failedList    = [System.Collections.Generic.List[string]]::new()
+        $passedCount   = 0
+        $errorWatchers = [System.Collections.Generic.List[string]]::new()
 
         foreach ($nw in $networkWatchers) {
             try {
@@ -73,8 +74,18 @@ function Test-FlowLogRetention {
                 }
             }
             catch {
-                Write-Verbose "Error retrieving flow logs from $($nw.Name): $($_.Exception.Message)"
+                $errorWatchers.Add("$($nw.Name): $(Format-CISErrorMessage $_.Exception.Message)")
             }
+        }
+
+        # If ALL watchers failed to respond, return WARNING instead of false FAIL
+        if ($totalCount -eq 0 -and $errorWatchers.Count -gt 0) {
+            return New-CISCheckResult `
+                -ControlId $ControlDef.ControlId `
+                -Title $ControlDef.Title `
+                -Status 'WARNING' `
+                -Details "Could not retrieve $FlowLogType flow logs from $($errorWatchers.Count) Network Watcher(s). Errors: $($errorWatchers -join '; ')" `
+                -TotalResources 0 -PassedResources 0 -FailedResources 0
         }
 
         if ($totalCount -eq 0) {

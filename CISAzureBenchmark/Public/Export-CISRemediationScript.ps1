@@ -20,10 +20,10 @@ function Export-CISRemediationScript {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(ParameterSetName = 'FromResults')]
+        [Parameter(Mandatory, ParameterSetName = 'FromResults')]
         [PSCustomObject[]]$Results,
 
-        [Parameter(ParameterSetName = 'FromJson')]
+        [Parameter(Mandatory, ParameterSetName = 'FromJson')]
         [ValidateScript({ Test-Path $_ -PathType Leaf })]
         [string]$JsonPath,
 

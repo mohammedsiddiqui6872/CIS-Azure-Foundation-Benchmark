@@ -139,18 +139,24 @@ function Test-CIS9312-KeyRegeneration {
                 $key1Time = $sa.KeyCreationTime.Key1
                 $key2Time = $sa.KeyCreationTime.Key2
 
-                $key1AgeDays = if ($key1Time) { ($now - $key1Time).TotalDays } else { [double]::MaxValue }
-                $key2AgeDays = if ($key2Time) { ($now - $key2Time).TotalDays } else { [double]::MaxValue }
+                # Only evaluate keys that have valid timestamps
+                $key1AgeDays = if ($key1Time) { ($now - $key1Time).TotalDays } else { $null }
+                $key2AgeDays = if ($key2Time) { ($now - $key2Time).TotalDays } else { $null }
 
-                if ($key1AgeDays -gt $maxAgeDays -or $key2AgeDays -gt $maxAgeDays) {
+                $key1Old = ($null -ne $key1AgeDays) -and ($key1AgeDays -gt $maxAgeDays)
+                $key2Old = ($null -ne $key2AgeDays) -and ($key2AgeDays -gt $maxAgeDays)
+                $bothUnknown = ($null -eq $key1AgeDays) -and ($null -eq $key2AgeDays)
+
+                if ($bothUnknown) {
+                    $failedList.Add("$($sa.StorageAccountName) (key creation times unavailable)")
+                }
+                elseif ($key1Old -or $key2Old) {
                     $keysOld = $true
-                    $oldestDays = [math]::Max($key1AgeDays, $key2AgeDays)
-                    if ($oldestDays -eq [double]::MaxValue) {
-                        $failedList.Add("$($sa.StorageAccountName) (key age: unknown)")
-                    }
-                    else {
-                        $failedList.Add("$($sa.StorageAccountName) (oldest key: $([math]::Floor($oldestDays)) days)")
-                    }
+                    $ages = @()
+                    if ($null -ne $key1AgeDays) { $ages += $key1AgeDays }
+                    if ($null -ne $key2AgeDays) { $ages += $key2AgeDays }
+                    $oldestDays = ($ages | Measure-Object -Maximum).Maximum
+                    $failedList.Add("$($sa.StorageAccountName) (oldest key: $([math]::Floor($oldestDays)) days)")
                 }
                 else {
                     $passedCount++
@@ -330,11 +336,8 @@ function Test-CIS935-TrustedServices {
                 }
             }
 
-            # Default behavior allows trusted services when no explicit deny
-            if (-not $bypassTrusted -and $sa.NetworkRuleSet -and $sa.NetworkRuleSet.DefaultAction -eq 'Allow') {
-                # If default is Allow, all services can access (including trusted)
-                $bypassTrusted = $true
-            }
+            # Note: DefaultAction='Allow' permits ALL traffic, not just trusted services.
+            # CIS 9.3.5 requires explicit Bypass='AzureServices' regardless of DefaultAction.
 
             if ($bypassTrusted) {
                 $passedCount++

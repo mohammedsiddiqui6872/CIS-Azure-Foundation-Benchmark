@@ -178,7 +178,7 @@ function Initialize-CISEnvironment {
             if (-not $graphConnected) {
                 Write-Host "`n  Connecting to Microsoft Graph for Identity checks..." -ForegroundColor Yellow
                 try {
-                    Connect-MgGraph -Scopes ($allScopes -join ',') -ErrorAction Stop -NoWelcome | Out-Null
+                    Connect-MgGraph -Scopes $allScopes -ErrorAction Stop -NoWelcome | Out-Null
                     $graphContext = Get-MgContext -ErrorAction Stop
                     $graphConnected = $true
                     Write-Host "  Microsoft Graph connected successfully." -ForegroundColor Green
@@ -190,9 +190,6 @@ function Initialize-CISEnvironment {
 
             if ($graphConnected) {
                 $envInfo.GraphConnected = $true
-                if (-not $envInfo.TenantDomain -and $graphContext.TenantId) {
-                    $envInfo.TenantDomain = $graphContext.TenantId
-                }
             }
         }
     }

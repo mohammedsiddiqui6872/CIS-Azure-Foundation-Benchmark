@@ -1,7 +1,7 @@
 @{
     BenchmarkVersion = 'v5.0.0'
     BenchmarkDate    = '09-30-2025'
-    TotalControls    = 152
+    TotalControls    = 155
 
     Controls = @(
         # =====================================================================
@@ -193,7 +193,7 @@
         }
 
         # =====================================================================
-        # SECTION 5: IDENTITY SERVICES (28 controls)
+        # SECTION 5: IDENTITY SERVICES (43 controls)
         # =====================================================================
 
         # 5.1 Security Defaults (Per-User MFA)
@@ -858,7 +858,7 @@
         }
 
         # =====================================================================
-        # SECTION 6: MANAGEMENT AND GOVERNANCE SERVICES (22 controls)
+        # SECTION 6: MANAGEMENT AND GOVERNANCE SERVICES (25 controls)
         # =====================================================================
 
         # 6.1.1 Configuring Diagnostic Settings
@@ -1497,7 +1497,7 @@
         }
 
         # =====================================================================
-        # SECTION 8: SECURITY SERVICES (29 controls)
+        # SECTION 8: SECURITY SERVICES (38 controls)
         # =====================================================================
 
         # 8.1 Microsoft Defender for Cloud
@@ -2096,7 +2096,7 @@
         }
 
         # =====================================================================
-        # SECTION 9: STORAGE SERVICES (23 controls)
+        # SECTION 9: STORAGE SERVICES (21 controls)
         # =====================================================================
 
         # 9.1 Azure Files

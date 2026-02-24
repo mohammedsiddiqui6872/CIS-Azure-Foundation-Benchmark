@@ -165,14 +165,14 @@ function Compare-CISBenchmarkResults {
         [void]$htmlLines.AppendLine('.summary-card{background:#16213e;border-radius:8px;padding:20px;text-align:center}.summary-card .number{font-size:2em;font-weight:bold}')
         [void]$htmlLines.AppendLine('.delta-pos{color:#00c853}.delta-neg{color:#ff5252}.delta-zero{color:#ffd740}</style></head><body>')
         [void]$htmlLines.AppendLine("<h1>CIS Azure Benchmark - Trend Report</h1>")
-        [void]$htmlLines.AppendLine("<p>Baseline: <strong>$($baseline.scanTimestamp)</strong> | Current: <strong>$($current.scanTimestamp)</strong></p>")
+        [void]$htmlLines.AppendLine("<p>Baseline: <strong>$([System.Web.HttpUtility]::HtmlEncode($baseline.scanTimestamp))</strong> | Current: <strong>$([System.Web.HttpUtility]::HtmlEncode($current.scanTimestamp))</strong></p>")
 
         $deltaClass = if ($scoreDelta -gt 0) { 'delta-pos' } elseif ($scoreDelta -lt 0) { 'delta-neg' } else { 'delta-zero' }
         $deltaStr = if ($scoreDelta -gt 0) { "+$scoreDelta%" } elseif ($null -eq $scoreDelta) { 'N/A' } else { "$scoreDelta%" }
         [void]$htmlLines.AppendLine('<div class="summary-grid">')
-        [void]$htmlLines.AppendLine("<div class='summary-card'><div class='number'>$baseScore%</div><div>Baseline Score</div></div>")
-        [void]$htmlLines.AppendLine("<div class='summary-card'><div class='number'>$currScore%</div><div>Current Score</div></div>")
-        [void]$htmlLines.AppendLine("<div class='summary-card'><div class='number $deltaClass'>$deltaStr</div><div>Change</div></div>")
+        [void]$htmlLines.AppendLine("<div class='summary-card'><div class='number'>$([System.Web.HttpUtility]::HtmlEncode($baseScore))%</div><div>Baseline Score</div></div>")
+        [void]$htmlLines.AppendLine("<div class='summary-card'><div class='number'>$([System.Web.HttpUtility]::HtmlEncode($currScore))%</div><div>Current Score</div></div>")
+        [void]$htmlLines.AppendLine("<div class='summary-card'><div class='number $deltaClass'>$([System.Web.HttpUtility]::HtmlEncode($deltaStr))</div><div>Change</div></div>")
         [void]$htmlLines.AppendLine('</div>')
 
         [void]$htmlLines.AppendLine('<div class="summary-grid">')
@@ -195,9 +195,9 @@ function Compare-CISBenchmarkResults {
                 [void]$htmlLines.AppendLine("<tr><td>$([System.Web.HttpUtility]::HtmlEncode($item.ControlId))</td><td>$([System.Web.HttpUtility]::HtmlEncode($item.Title))</td>")
                 if ($showBaseline) {
                     $baseClass = switch ($item.BaselineStatus) { 'PASS' { 'pass' } 'FAIL' { 'fail' } 'WARNING' { 'warn' } 'INFO' { 'info' } default { 'error' } }
-                    [void]$htmlLines.AppendLine("<td class='$baseClass'>$($item.BaselineStatus)</td><td class='$currClass'>$($item.CurrentStatus)</td>")
+                    [void]$htmlLines.AppendLine("<td class='$baseClass'>$([System.Web.HttpUtility]::HtmlEncode($item.BaselineStatus))</td><td class='$currClass'>$([System.Web.HttpUtility]::HtmlEncode($item.CurrentStatus))</td>")
                 } else {
-                    [void]$htmlLines.AppendLine("<td class='$currClass'>$($item.CurrentStatus)</td>")
+                    [void]$htmlLines.AppendLine("<td class='$currClass'>$([System.Web.HttpUtility]::HtmlEncode($item.CurrentStatus))</td>")
                 }
                 [void]$htmlLines.AppendLine('</tr>')
             }

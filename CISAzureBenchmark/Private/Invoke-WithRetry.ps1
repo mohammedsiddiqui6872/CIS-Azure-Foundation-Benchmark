@@ -21,7 +21,7 @@ function Invoke-WithRetry {
         [string]$OperationName = 'Azure API call'
     )
 
-    $attempt = 0
+    $attempt = 1
     $lastError = $null
 
     while ($attempt -le $MaxRetries) {
@@ -30,9 +30,8 @@ function Invoke-WithRetry {
         }
         catch {
             $lastError = $_
-            $attempt++
 
-            if ($attempt -gt $MaxRetries) {
+            if ($attempt -ge $MaxRetries) {
                 break
             }
 
@@ -56,6 +55,7 @@ function Invoke-WithRetry {
             $delayMs = $BaseDelayMs * [math]::Pow(2, ($attempt - 1))
             Write-Verbose "$OperationName failed (attempt $attempt/$MaxRetries): $errorMsg. Retrying in $($delayMs)ms..."
             Start-Sleep -Milliseconds $delayMs
+            $attempt++
         }
     }
 

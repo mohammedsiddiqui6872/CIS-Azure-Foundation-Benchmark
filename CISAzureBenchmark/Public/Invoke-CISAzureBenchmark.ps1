@@ -446,7 +446,7 @@ function Invoke-CISAzureBenchmark {
     Write-Host '  +============================================================+' -ForegroundColor DarkCyan
     Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
     Write-Host "  Score: $scoreDisplay" -ForegroundColor $scoreColor -NoNewline
-    $scorePad = 52 - "Score: $scoreDisplay".Length
+    $scorePad = [math]::Max(0, 52 - "Score: $scoreDisplay".Length)
     Write-Host (' ' * $scorePad) -NoNewline
     Write-Host '|' -ForegroundColor DarkCyan
     Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
@@ -456,12 +456,12 @@ function Invoke-CISAzureBenchmark {
     Write-Host "INFO: $infoCount  " -ForegroundColor Gray -NoNewline
     Write-Host "ERR: $errorCount" -ForegroundColor Magenta -NoNewline
     $statLine = "PASS: $passCount  FAIL: $failCount  WARN: $warningCount  INFO: $infoCount  ERR: $errorCount"
-    $statPad = 54 - $statLine.Length
+    $statPad = [math]::Max(0, 54 - $statLine.Length)
     Write-Host (' ' * $statPad) -NoNewline
     Write-Host '|' -ForegroundColor DarkCyan
     Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
     Write-Host "  Duration: $elapsedDisplay" -ForegroundColor White -NoNewline
-    $durPad = 52 - "Duration: $elapsedDisplay".Length
+    $durPad = [math]::Max(0, 52 - "Duration: $elapsedDisplay".Length)
     Write-Host (' ' * $durPad) -NoNewline
     Write-Host '|' -ForegroundColor DarkCyan
     Write-Host '  +------------------------------------------------------------+' -ForegroundColor DarkCyan
@@ -470,7 +470,7 @@ function Invoke-CISAzureBenchmark {
         $fullPath = (Resolve-Path $reportPaths[$fmt]).Path
         $line = "  $($fmt.PadRight(6)) $fullPath"
         if ($line.Length -gt 56) { $line = $line.Substring(0, 53) + '...' }
-        $linePad = 56 - $line.Length
+        $linePad = [math]::Max(0, 56 - $line.Length)
         Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
         Write-Host "$line" -ForegroundColor White -NoNewline
         Write-Host (' ' * $linePad) -NoNewline

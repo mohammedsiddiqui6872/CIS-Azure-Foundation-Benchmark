@@ -73,7 +73,7 @@ function Connect-CISAzureBenchmark {
     if (-not $graphConnected) {
         Write-Host '  [2/2] Connecting to Microsoft Graph...' -ForegroundColor Yellow
         try {
-            Connect-MgGraph -Scopes ($graphScopes -join ',') -ErrorAction Stop -NoWelcome | Out-Null
+            Connect-MgGraph -Scopes $graphScopes -ErrorAction Stop -NoWelcome | Out-Null
             $graphConnected = $true
             Write-Host '  [2/2] Microsoft Graph connected.' -ForegroundColor Green
         }

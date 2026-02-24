@@ -40,28 +40,32 @@ function Test-CIS8133-EndpointProtection {
 
         # Check for MDE (Microsoft Defender for Endpoint) integration
         $hasEndpointProtection = $false
+
+        # Method 1: Check Defender plan extensions for MDE-specific names
         if ($serversPlan.Extension) {
+            $mdeExtensionNames = @('MdeDesignatedSubscription', 'MicrosoftDefenderForEndpoint')
             $mdeExtension = $serversPlan.Extension | Where-Object {
-                $_.Name -eq 'MdeDesignatedSubscription' -or
-                $_.Name -eq 'MicrosoftDefenderForEndpoint' -or
-                $_.Name -match 'endpoint'
+                $_.Name -in $mdeExtensionNames
             }
-            if ($mdeExtension -and $mdeExtension.IsEnabled -ne 'False') {
-                $hasEndpointProtection = $true
+            if ($mdeExtension) {
+                $enabledExt = @($mdeExtension | Where-Object { $_.IsEnabled -ne 'False' -and $_.IsEnabled -ne $false })
+                if ($enabledExt.Count -gt 0) {
+                    $hasEndpointProtection = $true
+                }
             }
         }
 
-        # Alternative: Check settings via Get-AzSecuritySetting
+        # Method 2: Check WDATP (Windows Defender ATP) integration setting
         if (-not $hasEndpointProtection) {
             try {
                 $settings = @(Get-AzSecuritySetting -ErrorAction Stop)
-                $mdeSetting = $settings | Where-Object { $_.Name -eq 'WDATP' -or $_.Name -eq 'MCAS' }
-                if ($mdeSetting -and $mdeSetting.Enabled -eq $true) {
+                $wdatpSetting = $settings | Where-Object { $_.Name -eq 'WDATP' }
+                if ($wdatpSetting -and $wdatpSetting.Enabled -eq $true) {
                     $hasEndpointProtection = $true
                 }
             }
             catch {
-                Write-Verbose "Could not check security settings: $($_.Exception.Message)"
+                Write-Verbose "Could not check WDATP security setting: $($_.Exception.Message)"
             }
         }
 
@@ -126,39 +130,36 @@ function Test-CIS8110-VMUpdateCheck {
         # Check for Azure Update Manager periodic assessment
         $hasUpdateCheck = $false
 
-        # Check if the sub-plan or extension for vulnerability assessment exists
-        if ($serversPlan.SubPlan) {
-            # P1 and P2 plans include vulnerability scanning
+        # Check if the sub-plan includes vulnerability assessment
+        if ($serversPlan.PSObject -and $serversPlan.PSObject.Properties.Name -contains 'SubPlan') {
             if ($serversPlan.SubPlan -in @('P1', 'P2')) {
                 $hasUpdateCheck = $true
             }
         }
 
-        # Additionally check for Azure Policy assignment for update assessment
+        # Check for extensions that indicate update assessment
+        if (-not $hasUpdateCheck -and $serversPlan.Extension) {
+            $updateExtensions = @('AgentlessVmScanning', 'MdeDesignatedSubscription')
+            $matchingExt = $serversPlan.Extension | Where-Object {
+                $_.Name -in $updateExtensions -and $_.IsEnabled -ne 'False' -and $_.IsEnabled -ne $false
+            }
+            if ($matchingExt) {
+                $hasUpdateCheck = $true
+            }
+        }
+
+        # Fallback: Check for Azure Policy assignment for update assessment
         if (-not $hasUpdateCheck) {
             try {
+                $exactPolicyPatterns = '^(Configure periodic checking for missing system updates|machines should be configured to periodically check for missing system updates)$'
                 $policies = @(Get-AzPolicyAssignment -ErrorAction Stop |
-                    Where-Object { $_.Properties.DisplayName -match 'system updates|update management|periodic assessment' })
+                    Where-Object { $_.Properties.DisplayName -match $exactPolicyPatterns })
                 if ($policies.Count -gt 0) {
                     $hasUpdateCheck = $true
                 }
             }
             catch {
                 Write-Verbose "Could not check policy assignments: $($_.Exception.Message)"
-            }
-        }
-
-        # Check for VM extensions or update assessment configuration
-        if (-not $hasUpdateCheck) {
-            try {
-                $assessments = @(Get-AzSecurityAssessment -ErrorAction Stop |
-                    Where-Object { $_.DisplayName -match 'system updates|machines should be configured' })
-                if ($assessments.Count -gt 0) {
-                    $hasUpdateCheck = $true
-                }
-            }
-            catch {
-                Write-Verbose "Could not check security assessments: $($_.Exception.Message)"
             }
         }
 
@@ -497,15 +498,38 @@ function Test-CIS838-KeyVaultPrivateEndpoints {
         $failedList  = [System.Collections.Generic.List[string]]::new()
         $passedCount = 0
 
+        # Pre-fetch all private endpoints in the subscription once
+        $allPrivateEndpoints = @()
+        try {
+            $allPrivateEndpoints = @(Get-AzPrivateEndpoint -ErrorAction Stop)
+        }
+        catch {
+            Write-Verbose "Could not retrieve private endpoints: $($_.Exception.Message)"
+        }
+
         foreach ($kv in $keyVaults) {
             try {
-                # Get full Key Vault details to check private endpoints
-                $kvDetail = Get-AzKeyVault -VaultName $kv.VaultName -ResourceGroupName $kv.ResourceGroupName -ErrorAction Stop
+                $kvResourceId = $kv.ResourceId
+                if (-not $kvResourceId) {
+                    $kvResourceId = "/subscriptions/$((Get-AzContext).Subscription.Id)/resourceGroups/$($kv.ResourceGroupName)/providers/Microsoft.KeyVault/vaults/$($kv.VaultName)"
+                }
 
-                $peConnections = $kvDetail.NetworkAcls.VirtualNetworkResourceId
-                $privateEndpoints = $kvDetail.PrivateEndpointConnections
+                # Check if any private endpoint targets this Key Vault
+                $matchingPEs = @($allPrivateEndpoints | Where-Object {
+                    $_.PrivateLinkServiceConnections | Where-Object {
+                        $_.PrivateLinkServiceId -eq $kvResourceId
+                    }
+                })
 
-                if ($privateEndpoints -and $privateEndpoints.Count -gt 0) {
+                # Also check the vault object's PrivateEndpointConnections as a fallback
+                if ($matchingPEs.Count -eq 0) {
+                    $kvDetail = Get-AzKeyVault -VaultName $kv.VaultName -ResourceGroupName $kv.ResourceGroupName -ErrorAction Stop
+                    if ($kvDetail.PrivateEndpointConnections -and @($kvDetail.PrivateEndpointConnections).Count -gt 0) {
+                        $matchingPEs = @($kvDetail.PrivateEndpointConnections)
+                    }
+                }
+
+                if ($matchingPEs.Count -gt 0) {
                     $passedCount++
                 }
                 else {
@@ -513,13 +537,7 @@ function Test-CIS838-KeyVaultPrivateEndpoints {
                 }
             }
             catch {
-                # Try alternative property path from list view
-                if ($kv.PrivateEndpointConnections -and $kv.PrivateEndpointConnections.Count -gt 0) {
-                    $passedCount++
-                }
-                else {
-                    $failedList.Add("$($kv.VaultName) [Error: $($_.Exception.Message)]")
-                }
+                $failedList.Add("$($kv.VaultName) [Error: $(Format-CISErrorMessage $_.Exception.Message)]")
             }
         }
 

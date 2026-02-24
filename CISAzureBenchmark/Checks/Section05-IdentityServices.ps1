@@ -58,6 +58,20 @@ function Test-CIS512-MFAAllUsers {
                 -TotalResources 0 -PassedResources 0 -FailedResources 0
         }
 
+        # Exclude guest users - CIS requirement targets organization members only
+        $allUsers = @($allUsers | Where-Object {
+            $_.userType -ne 'Guest' -and $_.userType -ne 'guest'
+        })
+
+        if ($allUsers.Count -eq 0) {
+            return New-CISCheckResult `
+                -ControlId $ControlDef.ControlId `
+                -Title $ControlDef.Title `
+                -Status 'WARNING' `
+                -Details "No non-guest users found in user registration details." `
+                -TotalResources 0 -PassedResources 0 -FailedResources 0
+        }
+
         $totalCount  = $allUsers.Count
         $failedList  = [System.Collections.Generic.List[string]]::new()
         $passedCount = 0
@@ -130,8 +144,8 @@ function Test-CIS512-MFAAllUsers-Fallback {
     )
 
     try {
-        $users = @(Get-MgUser -All -Property Id, DisplayName, UserPrincipalName, AccountEnabled -ErrorAction Stop |
-            Where-Object { $_.AccountEnabled -eq $true })
+        $users = @(Get-MgUser -All -Property Id, DisplayName, UserPrincipalName, AccountEnabled, UserType -ErrorAction Stop |
+            Where-Object { $_.AccountEnabled -eq $true -and $_.UserType -ne 'Guest' })
 
         if ($users.Count -eq 0) {
             return New-CISCheckResult `
@@ -327,7 +341,30 @@ function Test-CIS523-CustomAdminRoles {
             }
 
             if ($hasWildcard) {
-                $failedList.Add("$($role.Name) (Id: $($role.Id))")
+                # Only flag roles assignable at subscription or root scope
+                $isSubScope = $false
+                if ($role.AssignableScopes) {
+                    foreach ($scope in $role.AssignableScopes) {
+                        # Match subscription scope (/subscriptions/xxx) or root scope (/)
+                        if ($scope -eq '/' -or $scope -match '^/subscriptions/[^/]+$') {
+                            $isSubScope = $true
+                            break
+                        }
+                    }
+                }
+                else {
+                    # No scopes defined — assume subscription-level (conservative)
+                    $isSubScope = $true
+                }
+
+                if ($isSubScope) {
+                    $scopeDisplay = if ($role.AssignableScopes) { ($role.AssignableScopes -join ', ') } else { 'unknown' }
+                    $failedList.Add("$($role.Name) (Id: $($role.Id), Scopes: $scopeDisplay)")
+                }
+                else {
+                    # Wildcard action but only at resource group or lower — not a subscription admin
+                    $passedCount++
+                }
             }
             else {
                 $passedCount++
@@ -388,26 +425,38 @@ function Test-CIS527-SubscriptionOwners {
         $ownerAssignments = @(Get-AzRoleAssignment -RoleDefinitionName 'Owner' -ErrorAction Stop |
             Where-Object { $_.Scope -match '^/subscriptions/[^/]+$' })
 
-        $ownerCount = $ownerAssignments.Count
+        # Separate user owners from service principal owners
+        $userOwners = @($ownerAssignments | Where-Object { $_.ObjectType -eq 'User' })
+        $spOwners   = @($ownerAssignments | Where-Object { $_.ObjectType -ne 'User' })
+        $userCount  = $userOwners.Count
+        $totalCount = $ownerAssignments.Count
 
-        if ($ownerCount -ge 2 -and $ownerCount -le 3) {
-            $ownerNames = ($ownerAssignments | ForEach-Object { $_.DisplayName }) -join ', '
+        $ownerDetails = ($ownerAssignments | ForEach-Object {
+            $type = if ($_.ObjectType -eq 'User') { 'User' } else { $_.ObjectType }
+            "$($_.DisplayName) [$type]"
+        }) -join ', '
+
+        $spNote = ''
+        if ($spOwners.Count -gt 0) {
+            $spNote = " Note: $($spOwners.Count) owner(s) are service principals (not human users)."
+        }
+
+        if ($userCount -ge 2 -and $userCount -le 3) {
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
                 -Status 'PASS' `
-                -Details "Subscription has $ownerCount owner(s), which is within the recommended range (2-3). Owners: $ownerNames" `
-                -TotalResources $ownerCount `
-                -PassedResources $ownerCount `
+                -Details "Subscription has $userCount user owner(s), within the recommended range (2-3). All owners: $ownerDetails$spNote" `
+                -TotalResources $totalCount `
+                -PassedResources $totalCount `
                 -FailedResources 0
         }
 
-        $ownerNames = ($ownerAssignments | ForEach-Object { $_.DisplayName }) -join ', '
-        if ($ownerCount -lt 2) {
-            $details = "Subscription has only $ownerCount owner(s). Minimum 2 recommended for availability. Current owners: $ownerNames"
+        if ($userCount -lt 2) {
+            $details = "Subscription has only $userCount user owner(s). Minimum 2 recommended for availability. All owners: $ownerDetails$spNote"
         }
         else {
-            $details = "Subscription has $ownerCount owner(s), which exceeds the recommended maximum of 3. Current owners: $ownerNames"
+            $details = "Subscription has $userCount user owner(s), exceeding the recommended maximum of 3. All owners: $ownerDetails$spNote"
         }
 
         return New-CISCheckResult `
@@ -415,10 +464,10 @@ function Test-CIS527-SubscriptionOwners {
             -Title $ControlDef.Title `
             -Status 'FAIL' `
             -Details $details `
-            -AffectedResources ($ownerAssignments | ForEach-Object { "$($_.DisplayName) ($($_.SignInName))" }) `
-            -TotalResources $ownerCount `
+            -AffectedResources ($ownerAssignments | ForEach-Object { "$($_.DisplayName) ($($_.SignInName)) [$($_.ObjectType)]" }) `
+            -TotalResources $totalCount `
             -PassedResources 0 `
-            -FailedResources $ownerCount
+            -FailedResources $totalCount
     }
     catch {
         $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
@@ -470,7 +519,7 @@ function Test-CIS533-UserAccessAdmin {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'FAIL' `
-            -Details "Found $assignmentCount User Access Administrator assignment(s) at root scope (/). This role should be tightly restricted. Assigned to: $(($rootAssignments | ForEach-Object { $_.DisplayName }) -join ', ')" `
+            -Details "Found $assignmentCount User Access Administrator assignment(s) at root scope (/). This role should be tightly restricted. Assigned to: $(($rootAssignments | ForEach-Object { $_.DisplayName }) -join ', '). Note: Some assignments may be temporary PIM/JIT activations - verify in Azure AD PIM." `
             -AffectedResources $affectedResources `
             -TotalResources $assignmentCount `
             -PassedResources 0 `
