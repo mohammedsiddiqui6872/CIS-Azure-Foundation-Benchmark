@@ -490,7 +490,7 @@ function Invoke-StorageBlobPropertyCheck {
         Checks blob service properties for each storage account.
     .DESCRIPTION
         Supports CheckType values: BlobSoftDelete, ContainerSoftDelete, BlobVersioning.
-        Retrieves blob service properties via the storage account context and validates the setting.
+        Uses pre-cached blob service properties when available, falls back to API calls.
     #>
     [CmdletBinding()]
     param(
@@ -498,7 +498,10 @@ function Invoke-StorageBlobPropertyCheck {
         [hashtable]$ControlDef,
 
         [Parameter()]
-        [object[]]$CachedStorageAccounts = @()
+        [object[]]$CachedStorageAccounts = @(),
+
+        [Parameter()]
+        [hashtable]$CachedBlobProperties = @{}
     )
 
     try {
@@ -525,10 +528,15 @@ function Invoke-StorageBlobPropertyCheck {
             $rgName = $sa.ResourceGroupName
 
             try {
-                $blobService = Get-AzStorageBlobServiceProperty `
-                    -StorageAccountName $saName `
-                    -ResourceGroupName $rgName `
-                    -ErrorAction Stop
+                # Use cached properties if available, otherwise fetch
+                $blobService = if ($CachedBlobProperties -and $CachedBlobProperties.ContainsKey($saName)) {
+                    $CachedBlobProperties[$saName]
+                } else {
+                    Get-AzStorageBlobServiceProperty `
+                        -StorageAccountName $saName `
+                        -ResourceGroupName $rgName `
+                        -ErrorAction Stop
+                }
 
                 $isCompliant = $false
 
@@ -602,7 +610,7 @@ function Invoke-StorageFilePropertyCheck {
         Checks file service properties for each storage account.
     .DESCRIPTION
         Supports CheckType values: SoftDelete, SMBVersion, SMBEncryption.
-        Retrieves file service properties and validates the setting.
+        Uses pre-cached file service properties when available, falls back to API calls.
     #>
     [CmdletBinding()]
     param(
@@ -610,7 +618,10 @@ function Invoke-StorageFilePropertyCheck {
         [hashtable]$ControlDef,
 
         [Parameter()]
-        [object[]]$CachedStorageAccounts = @()
+        [object[]]$CachedStorageAccounts = @(),
+
+        [Parameter()]
+        [hashtable]$CachedFileProperties = @{}
     )
 
     try {
@@ -637,10 +648,15 @@ function Invoke-StorageFilePropertyCheck {
             $rgName = $sa.ResourceGroupName
 
             try {
-                $fileService = Get-AzStorageFileServiceProperty `
-                    -StorageAccountName $saName `
-                    -ResourceGroupName $rgName `
-                    -ErrorAction Stop
+                # Use cached properties if available, otherwise fetch
+                $fileService = if ($CachedFileProperties -and $CachedFileProperties.ContainsKey($saName)) {
+                    $CachedFileProperties[$saName]
+                } else {
+                    Get-AzStorageFileServiceProperty `
+                        -StorageAccountName $saName `
+                        -ResourceGroupName $rgName `
+                        -ErrorAction Stop
+                }
 
                 $isCompliant = $false
 

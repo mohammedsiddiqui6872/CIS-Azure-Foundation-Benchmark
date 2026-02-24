@@ -2,6 +2,9 @@
 reports/
 *.html
 !CISAzureBenchmark/Data/HtmlTemplate.html
+CIS-Azure-*.csv
+CIS-Azure-*.json
+CIS-Azure-*.sarif
 
 # PowerShell module artifacts
 *.nupkg
@@ -15,6 +18,9 @@ reports/
 # OS files
 Thumbs.db
 .DS_Store
+
+# Tests (local only)
+Tests/
 
 # Temporary files
 *.tmp

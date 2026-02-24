@@ -1,3 +1,6 @@
+if (-not $script:CISProgressTimes) { $script:CISProgressTimes = [System.Collections.Generic.List[double]]::new() }
+if (-not $script:CISProgressLastCheck) { $script:CISProgressLastCheck = $null }
+
 function Write-CISProgress {
     [CmdletBinding()]
     param(
@@ -22,9 +25,28 @@ function Write-CISProgress {
         $Status = "[$Current/$Total] $Status"
     }
 
+    # Track timing for ETA estimation
+    $now = [DateTime]::UtcNow
+    if ($script:CISProgressLastCheck) {
+        $elapsed = ($now - $script:CISProgressLastCheck).TotalSeconds
+        $script:CISProgressTimes.Add($elapsed)
+    }
+    $script:CISProgressLastCheck = $now
+
+    $eta = ''
+    if ($script:CISProgressTimes.Count -ge 3 -and $Current -lt $Total) {
+        $avgTime = ($script:CISProgressTimes | Measure-Object -Average).Average
+        $remaining = ($Total - $Current) * $avgTime
+        if ($remaining -ge 60) {
+            $eta = " (~$([math]::Ceiling($remaining / 60)) min remaining)"
+        } else {
+            $eta = " (~$([math]::Ceiling($remaining))s remaining)"
+        }
+    }
+
     $progressParams = @{
         Activity = "CIS Azure Benchmark v5.0.0 - $Activity"
-        Status   = $Status
+        Status   = "${Status}${eta}"
     }
 
     if ($PercentComplete -ge 0) {

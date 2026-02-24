@@ -88,11 +88,12 @@ function Test-CIS9311-KeyRotationReminders {
             -FailedResources 0
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking key rotation reminders: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking key rotation reminders: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -102,7 +103,7 @@ function Test-CIS9312-KeyRegeneration {
         CIS 9.3.1.2 - Ensure Storage Account access keys are periodically regenerated.
     .DESCRIPTION
         Checks storage account key creation time to verify keys have been
-        regenerated within the recommended period (90 days).
+        regenerated within the configured period (default 90 days, configurable via CISConfig.KeyRotationMaxDays).
     #>
     [CmdletBinding()]
     param(
@@ -124,7 +125,7 @@ function Test-CIS9312-KeyRegeneration {
                 -TotalResources 0 -PassedResources 0 -FailedResources 0
         }
 
-        $maxAgeDays  = 90
+        $maxAgeDays  = if ($script:CISConfig.KeyRotationMaxDays) { $script:CISConfig.KeyRotationMaxDays } else { 90 }
         $now         = [DateTime]::UtcNow
         $totalCount  = $storageAccounts.Count
         $failedList  = [System.Collections.Generic.List[string]]::new()
@@ -185,11 +186,12 @@ function Test-CIS9312-KeyRegeneration {
             -FailedResources 0
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking key regeneration: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking key regeneration: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -277,11 +279,12 @@ function Test-CIS9321-StoragePrivateEndpoints {
             -FailedResources 0
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking storage private endpoints: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking storage private endpoints: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -368,11 +371,12 @@ function Test-CIS935-TrustedServices {
             -FailedResources 0
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking trusted services: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking trusted services: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -455,10 +459,11 @@ function Test-CIS9311-StorageRedundancy {
             -FailedResources 0
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking storage redundancy: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking storage redundancy: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }

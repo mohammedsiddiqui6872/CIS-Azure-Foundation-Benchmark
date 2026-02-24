@@ -34,7 +34,7 @@ function Export-CISReport {
         [string]$OutputDirectory,
 
         [Parameter()]
-        [ValidateSet('HTML', 'CSV', 'All')]
+        [ValidateSet('HTML', 'CSV', 'SARIF', 'All')]
         [string[]]$OutputFormat = @('All'),
 
         [Parameter()]
@@ -93,7 +93,7 @@ function Export-CISReport {
         }
     }
 
-    $formats = if ('All' -in $OutputFormat) { @('HTML', 'CSV') } else { $OutputFormat }
+    $formats = if ('All' -in $OutputFormat) { @('HTML', 'CSV', 'SARIF') } else { $OutputFormat }
     $reportPaths = @{}
 
     if ('HTML' -in $formats) {
@@ -108,6 +108,13 @@ function Export-CISReport {
         Write-Host "  Generating CSV report..." -ForegroundColor Yellow
         $reportPaths.CSV = New-CISCsvReport -Results $results -OutputPath $csvPath -Metadata $metadata
         Write-Host "  CSV:  $csvPath" -ForegroundColor Green
+    }
+
+    if ('SARIF' -in $formats) {
+        $sarifPath = Join-Path $OutputDirectory "$ReportName.sarif"
+        Write-Host "  Generating SARIF report..." -ForegroundColor Yellow
+        $reportPaths.SARIF = New-CISSarifReport -Results $results -OutputPath $sarifPath -Metadata $metadata
+        Write-Host "  SARIF: $sarifPath" -ForegroundColor Green
     }
 
     return $reportPaths

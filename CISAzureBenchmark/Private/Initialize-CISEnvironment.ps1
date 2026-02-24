@@ -22,7 +22,6 @@ function Install-CISRequiredModule {
             Scope              = 'CurrentUser'
             Force              = $true
             AllowClobber       = $true
-            SkipPublisherCheck = $true
             ErrorAction        = 'Stop'
         }
         if ($MinimumVersion) { $installParams.MinimumVersion = $MinimumVersion }
@@ -114,14 +113,27 @@ function Initialize-CISEnvironment {
 
         Write-Host "  All required modules are available." -ForegroundColor Green
 
-        # --- Check Azure connection ---
+        # --- Check and auto-connect to Azure ---
         $azContext = $null
         try {
             $azContext = Get-AzContext -ErrorAction Stop
         }
         catch {
-            $envInfo.IsValid = $false
-            $envInfo.Errors += "Azure PowerShell is not connected. Run 'Connect-AzAccount' first."
+            $azContext = $null
+        }
+
+        if (-not $azContext -or -not $azContext.Subscription) {
+            Write-Host "`n  Azure is not connected. Launching interactive login..." -ForegroundColor Yellow
+            try {
+                Connect-AzAccount -ErrorAction Stop | Out-Null
+                $azContext = Get-AzContext -ErrorAction Stop
+                Write-Host "  Azure connected successfully." -ForegroundColor Green
+            }
+            catch {
+                $envInfo.IsValid = $false
+                $envInfo.Errors += "Failed to connect to Azure: $($_.Exception.Message)"
+                return $envInfo
+            }
         }
 
         if ($azContext) {
@@ -140,37 +152,47 @@ function Initialize-CISEnvironment {
             $envInfo.TenantId         = $azContext.Tenant.Id
         }
 
-        # --- Check Graph connection if needed ---
+        # --- Check and auto-connect to Microsoft Graph if needed ---
         if ($envInfo.NeedsGraph) {
+            $graphConnected = $false
+            $allScopes = @('Policy.Read.All', 'Directory.Read.All', 'UserAuthenticationMethod.Read.All', 'Reports.Read.All')
+
             try {
                 $graphContext = Get-MgContext -ErrorAction Stop
                 if ($graphContext) {
-                    $envInfo.GraphConnected = $true
-                    if (-not $envInfo.TenantDomain -and $graphContext.TenantId) {
-                        $envInfo.TenantDomain = $graphContext.TenantId
-                    }
-
-                    # Validate required Graph scopes
-                    $requiredScopes = @('Policy.Read.All', 'Directory.Read.All')
-                    $optionalScopes = @('UserAuthenticationMethod.Read.All', 'Reports.Read.All')
+                    $graphConnected = $true
                     $currentScopes = @($graphContext.Scopes)
 
-                    $missingRequired = @($requiredScopes | Where-Object { $_ -notin $currentScopes })
-                    $missingOptional = @($optionalScopes | Where-Object { $_ -notin $currentScopes })
-
-                    if ($missingRequired.Count -gt 0) {
-                        $envInfo.Warnings += "Microsoft Graph is connected but missing required scopes: $($missingRequired -join ', '). Some identity checks may fail. Reconnect with: Connect-MgGraph -Scopes $($requiredScopes -join ',')"
+                    # Check if all required scopes are present
+                    $missingScopes = @($allScopes | Where-Object { $_ -notin $currentScopes })
+                    if ($missingScopes.Count -gt 0) {
+                        Write-Host "  Graph is connected but missing scopes: $($missingScopes -join ', '). Reconnecting..." -ForegroundColor Yellow
+                        $graphConnected = $false
                     }
-                    if ($missingOptional.Count -gt 0) {
-                        $envInfo.Warnings += "Microsoft Graph is missing optional scopes: $($missingOptional -join ', '). MFA registration checks may use fallback methods. For full accuracy: Connect-MgGraph -Scopes $(@($requiredScopes + $optionalScopes) -join ',')"
-                    }
-                }
-                else {
-                    $envInfo.Warnings += "Microsoft Graph is not connected. Identity checks (Section 5) will return ERROR. Run 'Connect-MgGraph -Scopes Policy.Read.All,Directory.Read.All,UserAuthenticationMethod.Read.All' to enable."
                 }
             }
             catch {
-                $envInfo.Warnings += "Microsoft Graph module not available. Identity checks (Section 5) will return ERROR. Install with: Install-Module Microsoft.Graph.Identity.SignIns"
+                $graphConnected = $false
+            }
+
+            if (-not $graphConnected) {
+                Write-Host "`n  Connecting to Microsoft Graph for Identity checks..." -ForegroundColor Yellow
+                try {
+                    Connect-MgGraph -Scopes ($allScopes -join ',') -ErrorAction Stop -NoWelcome | Out-Null
+                    $graphContext = Get-MgContext -ErrorAction Stop
+                    $graphConnected = $true
+                    Write-Host "  Microsoft Graph connected successfully." -ForegroundColor Green
+                }
+                catch {
+                    $envInfo.Warnings += "Could not connect to Microsoft Graph: $($_.Exception.Message). Identity checks (Section 5) will return ERROR."
+                }
+            }
+
+            if ($graphConnected) {
+                $envInfo.GraphConnected = $true
+                if (-not $envInfo.TenantDomain -and $graphContext.TenantId) {
+                    $envInfo.TenantDomain = $graphContext.TenantId
+                }
             }
         }
     }
@@ -184,7 +206,7 @@ function Initialize-CISEnvironment {
                 $envInfo.TenantId         = $azContext.Tenant.Id
             }
         }
-        catch { }
+        catch { Write-Verbose "Could not retrieve Azure context: $($_.Exception.Message)" }
     }
 
     return $envInfo

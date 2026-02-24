@@ -36,8 +36,8 @@ function Invoke-CISAzureBenchmark {
         Target subscription. Uses current context if not specified.
 
     .PARAMETER AllSubscriptions
-        Scan all available subscriptions and combine results into a single HTML report
-        with a subscription switcher dropdown.
+        Scan all available subscriptions (this is now the default behavior).
+        Kept for backwards compatibility.
 
     .PARAMETER SkipModuleCheck
         Skip Azure module validation.
@@ -77,7 +77,7 @@ function Invoke-CISAzureBenchmark {
         [string]$OutputDirectory = '.',
 
         [Parameter()]
-        [ValidateSet('HTML', 'JSON', 'CSV', 'All')]
+        [ValidateSet('HTML', 'JSON', 'CSV', 'SARIF', 'All')]
         [string[]]$OutputFormat = @('All'),
 
         [Parameter()]
@@ -90,24 +90,51 @@ function Invoke-CISAzureBenchmark {
         [switch]$AllSubscriptions,
 
         [Parameter()]
-        [switch]$SkipModuleCheck
+        [switch]$SkipModuleCheck,
+
+        [Parameter()]
+        [string]$ConfigPath,
+
+        [Parameter()]
+        [hashtable]$ExcludeResourceTag
     )
 
     $ErrorActionPreference = 'Continue'
     $startTime = Get-Date
 
+    # Suppress noisy Azure module deprecation/breaking change warnings
+    $env:SuppressAzurePowerShellBreakingChangeWarnings = 'true'
+    $savedWarningPref = $WarningPreference
+    $WarningPreference = 'SilentlyContinue'
+    try { Update-AzConfig -DisplayBreakingChangeWarning $false -ErrorAction SilentlyContinue | Out-Null } catch { }
+
+    # Load config overrides if specified
+    if ($ConfigPath) {
+        Set-CISConfigOverride -ConfigPath $ConfigPath
+    }
+
     # Banner
-    Write-Host ""
-    Write-Host "  ============================================================" -ForegroundColor Cyan
-    Write-Host "  CIS Microsoft Azure Foundations Benchmark v5.0.0" -ForegroundColor Cyan
-    Write-Host "  Compliance Checker" -ForegroundColor Cyan
-    Write-Host "  ============================================================" -ForegroundColor Cyan
-    Write-Host ""
+    Write-Host ''
+    Write-Host '  +============================================================+' -ForegroundColor DarkCyan
+    Write-Host '  |                                                            |' -ForegroundColor DarkCyan
+    Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
+    Write-Host '    CIS Microsoft Azure Foundations Benchmark      ' -ForegroundColor Cyan -NoNewline
+    Write-Host '|' -ForegroundColor DarkCyan
+    Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
+    Write-Host '             v5.0.0  |  155 Controls               ' -ForegroundColor White -NoNewline
+    Write-Host '|' -ForegroundColor DarkCyan
+    Write-Host '  |                                                            |' -ForegroundColor DarkCyan
+    Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
+    Write-Host '              powershellnerd.com                   ' -ForegroundColor Yellow -NoNewline
+    Write-Host '|' -ForegroundColor DarkCyan
+    Write-Host '  |                                                            |' -ForegroundColor DarkCyan
+    Write-Host '  +============================================================+' -ForegroundColor DarkCyan
+    Write-Host ''
 
     # ----------------------------------------------------------------
     # 1. Load control definitions
     # ----------------------------------------------------------------
-    $defPath = Join-Path $PSScriptRoot '..' 'Data' 'ControlDefinitions.psd1'
+    $defPath = Join-Path (Join-Path (Join-Path $PSScriptRoot '..') 'Data') 'ControlDefinitions.psd1'
     if (-not (Test-Path $defPath)) {
         Write-Error "Control definitions file not found: $defPath"
         return
@@ -133,7 +160,8 @@ function Invoke-CISAzureBenchmark {
             $ctrl = $_
             $Section | Where-Object {
                 $ctrl.Section -like "*$_*" -or
-                $ctrl.ControlId -like "$_*" -or
+                $ctrl.ControlId -eq $_ -or
+                $ctrl.ControlId.StartsWith("$_.") -or
                 $ctrl.Subsection -like "*$_*"
             }
         }
@@ -150,7 +178,7 @@ function Invoke-CISAzureBenchmark {
     $automatedCount = ($controls | Where-Object { $_.AssessmentStatus -eq 'Automated' }).Count
     $manualCount = ($controls | Where-Object { $_.AssessmentStatus -eq 'Manual' }).Count
 
-    Write-Host "  Running $($controls.Count) checks ($automatedCount automated, $manualCount manual)" -ForegroundColor Yellow
+    Write-Host "  Running $($controls.Count) checks`($automatedCount automated, $manualCount manual`)" -ForegroundColor Yellow
     Write-Host ""
 
     if ($controls.Count -eq 0) {
@@ -161,23 +189,27 @@ function Invoke-CISAzureBenchmark {
     # ----------------------------------------------------------------
     # 3. Determine subscriptions to scan
     # ----------------------------------------------------------------
+    # Default: scan ALL enabled subscriptions automatically.
+    # Use -SubscriptionId to target a single subscription instead.
     $subscriptionsToScan = @()
 
-    if ($AllSubscriptions) {
+    if ($SubscriptionId) {
+        # User explicitly chose a single subscription
+        $subscriptionsToScan = @($null)
+    } else {
+        # Scan all enabled subscriptions by default
+        $AllSubscriptions = $true
         $subscriptionsToScan = @(Get-AzSubscription -ErrorAction SilentlyContinue |
             Where-Object { $_.State -eq 'Enabled' })
         if ($subscriptionsToScan.Count -eq 0) {
-            Write-Error "No enabled subscriptions found."
+            Write-Error 'No enabled subscriptions found.'
             return
         }
-        Write-Host "  Scanning $($subscriptionsToScan.Count) subscription(s):" -ForegroundColor Cyan
+        Write-Host "  Scanning $($subscriptionsToScan.Count) subscription`(s`):" -ForegroundColor Cyan
         foreach ($sub in $subscriptionsToScan) {
-            Write-Host "    - $($sub.Name) ($($sub.Id))" -ForegroundColor White
+            Write-Host "    - $($sub.Name)" -ForegroundColor White
         }
-        Write-Host ""
-    } else {
-        # Single subscription mode - just a placeholder
-        $subscriptionsToScan = @($null)
+        Write-Host ''
     }
 
     # ----------------------------------------------------------------
@@ -235,7 +267,9 @@ function Invoke-CISAzureBenchmark {
 
         # Pre-fetch resources
         Write-Host "  Pre-fetching Azure resources..." -ForegroundColor Yellow
-        $resourceCache = Initialize-CISResourceCache -ControlsToRun $controls
+        $cacheParams = @{ ControlsToRun = $controls }
+        if ($ExcludeResourceTag) { $cacheParams.ExcludeResourceTag = $ExcludeResourceTag }
+        $resourceCache = Initialize-CISResourceCache @cacheParams
         Write-Host "  Resource cache ready" -ForegroundColor Green
         Write-Host ""
 
@@ -243,6 +277,7 @@ function Invoke-CISAzureBenchmark {
         Write-Host "  Running compliance checks..." -ForegroundColor Yellow
         $subResults = [System.Collections.Generic.List[PSCustomObject]]::new()
         $checkCount = 0
+        $script:CISCheckStartTime = Get-Date
 
         foreach ($ctrl in $controls) {
             $checkCount++
@@ -300,13 +335,15 @@ function Invoke-CISAzureBenchmark {
 
     # Score excludes INFO (manual checks) and WARNING (indeterminate) from denominator
     $scoreDenom = $allResults.Count - $infoCount - $warningCount
-    $score = if ($scoreDenom -gt 0) { [math]::Round(($passCount / $scoreDenom) * 100, 1) } else { 0 }
+    $score = if ($scoreDenom -gt 0) { [math]::Round(($passCount / $scoreDenom) * 100, 1) } else { -1 }
 
     Write-Host ""
     Write-Host "  ============================================================" -ForegroundColor Cyan
     Write-Host "  RESULTS SUMMARY$(if ($AllSubscriptions) { " (All $($multiSubData.Count) Subscriptions Combined)" })" -ForegroundColor Cyan
     Write-Host "  ============================================================" -ForegroundColor Cyan
-    Write-Host "  Automated Checks Score: $score%" -ForegroundColor $(if ($score -ge 80) { 'Green' } elseif ($score -ge 50) { 'Yellow' } else { 'Red' })
+    $scoreDisplay = if ($score -lt 0) { 'N/A (no evaluated controls)' } else { "$score%" }
+    $scoreColor = if ($score -lt 0) { 'DarkGray' } elseif ($score -ge 80) { 'Green' } elseif ($score -ge 50) { 'Yellow' } else { 'Red' }
+    Write-Host "  Automated Checks Score: $scoreDisplay" -ForegroundColor $scoreColor
     Write-Host "  (Based on $scoreDenom evaluated controls, excludes $infoCount manual + $warningCount indeterminate)" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  PASS:    $passCount" -ForegroundColor Green
@@ -320,28 +357,34 @@ function Invoke-CISAzureBenchmark {
     # ----------------------------------------------------------------
     # 6. Generate reports
     # ----------------------------------------------------------------
+    # Validate output path
+    $resolvedOutput = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
+    if ($resolvedOutput -match '^\\\\') {
+        Write-Warning "Output directory is a UNC path ($resolvedOutput). Reports contain sensitive data - ensure the share is secured."
+    }
     if (-not (Test-Path $OutputDirectory)) {
         New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
     }
 
-    $metadata = $primaryMetadata ?? @{
+    $metadata = if ($primaryMetadata) { $primaryMetadata } else { @{
         SubscriptionName = 'Unknown'
         SubscriptionId   = 'Unknown'
         TenantId         = 'Unknown'
         ScanTimestamp    = [DateTime]::UtcNow.ToString('o')
-    }
+    } }
 
     if ($AllSubscriptions) {
         $metadata.SubscriptionName = "All Subscriptions ($($multiSubData.Count))"
     }
 
     if (-not $ReportName) {
-        $safeSub = if ($AllSubscriptions) { "AllSubscriptions" } else { ($metadata.SubscriptionName ?? 'Unknown') -replace '[^\w\-]', '_' }
+        $subName = if ($metadata.SubscriptionName) { $metadata.SubscriptionName } else { 'Unknown' }
+        $safeSub = if ($AllSubscriptions) { "AllSubscriptions" } else { $subName -replace '[^\w\-]', '_' }
         $dateStamp = (Get-Date).ToString('yyyyMMdd-HHmmss')
         $ReportName = "CIS-Azure-v5.0.0_${safeSub}_${dateStamp}"
     }
 
-    $formats = if ('All' -in $OutputFormat) { @('HTML', 'JSON', 'CSV') } else { $OutputFormat }
+    $formats = if ('All' -in $OutputFormat) { @('HTML', 'JSON', 'CSV', 'SARIF') } else { $OutputFormat }
 
     $reportPaths = @{}
 
@@ -374,21 +417,81 @@ function Invoke-CISAzureBenchmark {
         Write-Host "  CSV:  $csvPath" -ForegroundColor Green
     }
 
+    if ('SARIF' -in $formats) {
+        $sarifPath = Join-Path $OutputDirectory "$ReportName.sarif"
+        Write-Host "  Generating SARIF report..." -ForegroundColor Yellow
+        $reportPaths.SARIF = New-CISSarifReport -Results $allResults -OutputPath $sarifPath -Metadata $metadata
+        Write-Host "  SARIF: $sarifPath" -ForegroundColor Green
+    }
+
     # ----------------------------------------------------------------
     # 7. Done
     # ----------------------------------------------------------------
-    $elapsed = (Get-Date) - $startTime
-    Write-Host ""
-    Write-Host "  Completed in $([math]::Round($elapsed.TotalSeconds, 1)) seconds" -ForegroundColor Cyan
-    Write-Host "  ============================================================" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  SECURITY NOTICE: Reports contain sensitive information including" -ForegroundColor Yellow
-    Write-Host "  subscription IDs, tenant IDs, resource names, security contact" -ForegroundColor Yellow
-    Write-Host "  emails, and compliance gaps. Handle with appropriate care." -ForegroundColor Yellow
-    Write-Host "  Do NOT commit reports to version control." -ForegroundColor Yellow
-    Write-Host ""
+    # Restore warning preference
+    $WarningPreference = $savedWarningPref
 
-    return [PSCustomObject]@{
+    $elapsed = (Get-Date) - $startTime
+    $elapsedDisplay = if ($elapsed.TotalMinutes -ge 1) {
+        "{0}m {1}s" -f [math]::Floor($elapsed.TotalMinutes), $elapsed.Seconds
+    } else {
+        "$([math]::Round($elapsed.TotalSeconds, 1))s"
+    }
+
+    $scoreColor = if ($score -ge 80) { 'Green' } elseif ($score -ge 50) { 'Yellow' } else { 'Red' }
+    $scoreDisplay = if ($score -eq -1) { "N/A" } else { "$score%" }
+
+    Write-Host ''
+    Write-Host '  +============================================================+' -ForegroundColor DarkCyan
+    Write-Host '  |                       SCAN COMPLETE                         |' -ForegroundColor DarkCyan
+    Write-Host '  +============================================================+' -ForegroundColor DarkCyan
+    Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
+    Write-Host "  Score: $scoreDisplay" -ForegroundColor $scoreColor -NoNewline
+    $scorePad = 52 - "Score: $scoreDisplay".Length
+    Write-Host (' ' * $scorePad) -NoNewline
+    Write-Host '|' -ForegroundColor DarkCyan
+    Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
+    Write-Host "  PASS: $passCount  " -ForegroundColor Green -NoNewline
+    Write-Host "FAIL: $failCount  " -ForegroundColor Red -NoNewline
+    Write-Host "WARN: $warningCount  " -ForegroundColor Yellow -NoNewline
+    Write-Host "INFO: $infoCount  " -ForegroundColor Gray -NoNewline
+    Write-Host "ERR: $errorCount" -ForegroundColor Magenta -NoNewline
+    $statLine = "PASS: $passCount  FAIL: $failCount  WARN: $warningCount  INFO: $infoCount  ERR: $errorCount"
+    $statPad = 54 - $statLine.Length
+    Write-Host (' ' * $statPad) -NoNewline
+    Write-Host '|' -ForegroundColor DarkCyan
+    Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
+    Write-Host "  Duration: $elapsedDisplay" -ForegroundColor White -NoNewline
+    $durPad = 52 - "Duration: $elapsedDisplay".Length
+    Write-Host (' ' * $durPad) -NoNewline
+    Write-Host '|' -ForegroundColor DarkCyan
+    Write-Host '  +------------------------------------------------------------+' -ForegroundColor DarkCyan
+    Write-Host '  |  Report Files:                                              |' -ForegroundColor DarkCyan
+    foreach ($fmt in $reportPaths.Keys) {
+        $fullPath = (Resolve-Path $reportPaths[$fmt]).Path
+        $line = "  $($fmt.PadRight(6)) $fullPath"
+        if ($line.Length -gt 56) { $line = $line.Substring(0, 53) + '...' }
+        $linePad = 56 - $line.Length
+        Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
+        Write-Host "$line" -ForegroundColor White -NoNewline
+        Write-Host (' ' * $linePad) -NoNewline
+        Write-Host '|' -ForegroundColor DarkCyan
+    }
+    Write-Host '  +============================================================+' -ForegroundColor DarkCyan
+    Write-Host ''
+    Write-Host '  Note: Reports contain sensitive data. Do not commit to source control.' -ForegroundColor DarkYellow
+    Write-Host ''
+
+    # Auto-open HTML report
+    if ($reportPaths.ContainsKey('HTML') -and (Test-Path $reportPaths.HTML)) {
+        try {
+            Start-Process (Resolve-Path $reportPaths.HTML).Path
+        }
+        catch {
+            Write-Verbose "Could not auto-open HTML report: $($_.Exception.Message)"
+        }
+    }
+
+    $resultObj = [PSCustomObject]@{
         PSTypeName      = 'CISBenchmarkReport'
         Score           = $score
         TotalControls   = $allResults.Count
@@ -403,4 +506,11 @@ function Invoke-CISAzureBenchmark {
         Duration        = $elapsed
         MultiSubscriptionData = $multiSubData
     }
+
+    # Set default display properties so the console shows a clean summary (not the full Results array)
+    $defaultProps = @('Score', 'TotalControls', 'Passed', 'Failed', 'Warning', 'Info', 'Error', 'Duration')
+    $defaultSet = New-Object System.Management.Automation.PSPropertySet('DefaultDisplayPropertySet', [string[]]$defaultProps)
+    $resultObj | Add-Member MemberSet PSStandardMembers ([System.Management.Automation.PSMemberInfo[]]@($defaultSet))
+
+    return $resultObj
 }

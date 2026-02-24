@@ -12,10 +12,10 @@ function Invoke-WithRetry {
         [scriptblock]$ScriptBlock,
 
         [Parameter()]
-        [int]$MaxRetries = 3,
+        [int]$MaxRetries = $(if ($script:CISConfig.MaxRetries) { $script:CISConfig.MaxRetries } else { 3 }),
 
         [Parameter()]
-        [int]$BaseDelayMs = 1000,
+        [int]$BaseDelayMs = $(if ($script:CISConfig.RetryBaseDelayMs) { $script:CISConfig.RetryBaseDelayMs } else { 1000 }),
 
         [Parameter()]
         [string]$OperationName = 'Azure API call'
@@ -40,7 +40,7 @@ function Invoke-WithRetry {
             $isRetryable = $false
             $errorMsg = $_.Exception.Message
 
-            if ($errorMsg -match '429|throttl|too many requests|service unavailable|503|504|timeout|transient') {
+            if ($errorMsg -match '\b429\b|throttl|too many requests|service unavailable|\b503\b|\b504\b|\btimeout\b|(?<!non-)\btransient\b') {
                 $isRetryable = $true
             }
             # Retry on generic network/HTTP errors

@@ -54,7 +54,7 @@ function Get-CISControlList {
         [string[]]$Severity
     )
 
-    $defPath = Join-Path $PSScriptRoot '..' 'Data' 'ControlDefinitions.psd1'
+    $defPath = Join-Path (Join-Path (Join-Path $PSScriptRoot '..') 'Data') 'ControlDefinitions.psd1'
     if (-not (Test-Path $defPath)) {
         Write-Error "Control definitions file not found: $defPath"
         return

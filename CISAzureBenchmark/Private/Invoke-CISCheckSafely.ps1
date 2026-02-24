@@ -71,8 +71,8 @@ function Invoke-CISControlCheck {
         'ActivityLogAlert'       { Invoke-ActivityLogAlertCheck -ControlDef $ControlDef -CachedAlerts $ResourceCache.ActivityLogAlerts }
         'NSGPortCheck'           { Invoke-NSGPortCheck -ControlDef $ControlDef -CachedNSGs $ResourceCache.NSGs }
         'StorageAccountProperty' { Invoke-StorageAccountPropertyCheck -ControlDef $ControlDef -CachedStorageAccounts $ResourceCache.StorageAccounts }
-        'StorageBlobProperty'    { Invoke-StorageBlobPropertyCheck -ControlDef $ControlDef -CachedStorageAccounts $ResourceCache.StorageAccounts }
-        'StorageFileProperty'    { Invoke-StorageFilePropertyCheck -ControlDef $ControlDef -CachedStorageAccounts $ResourceCache.StorageAccounts }
+        'StorageBlobProperty'    { Invoke-StorageBlobPropertyCheck -ControlDef $ControlDef -CachedStorageAccounts $ResourceCache.StorageAccounts -CachedBlobProperties $ResourceCache.BlobServiceProperties }
+        'StorageFileProperty'    { Invoke-StorageFilePropertyCheck -ControlDef $ControlDef -CachedStorageAccounts $ResourceCache.StorageAccounts -CachedFileProperties $ResourceCache.FileServiceProperties }
         'KeyVaultProperty'       { Invoke-KeyVaultPropertyCheck -ControlDef $ControlDef -CachedKeyVaults $ResourceCache.KeyVaults }
         'KeyVaultKeyExpiry'      { Invoke-KeyVaultKeyExpiryCheck -ControlDef $ControlDef -CachedKeyVaults $ResourceCache.KeyVaults }
         'KeyVaultSecretExpiry'   { Invoke-KeyVaultSecretExpiryCheck -ControlDef $ControlDef -CachedKeyVaults $ResourceCache.KeyVaults }

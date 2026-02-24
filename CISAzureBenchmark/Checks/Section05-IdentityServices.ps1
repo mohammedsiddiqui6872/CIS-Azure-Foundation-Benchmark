@@ -26,7 +26,8 @@ function Test-CIS512-MFAAllUsers {
 
     try {
         # Attempt to query user registration details via Graph API
-        $uri = 'https://graph.microsoft.com/v1.0/reports/authenticationMethods/userRegistrationDetails'
+        $pageSize = if ($script:CISConfig.GraphApiPageSize) { $script:CISConfig.GraphApiPageSize } else { 999 }
+        $uri = "https://graph.microsoft.com/v1.0/reports/authenticationMethods/userRegistrationDetails?`$top=$pageSize"
         $allUsers         = [System.Collections.Generic.List[object]]::new()
         $currentUri       = $uri
 
@@ -82,7 +83,7 @@ function Test-CIS512-MFAAllUsers {
         $failedCount = $failedList.Count
         if ($failedCount -gt 0) {
             # Cap the displayed list to avoid excessively long details
-            $displayMax   = 20
+            $displayMax   = if ($script:CISConfig.MaxDisplayItems) { $script:CISConfig.MaxDisplayItems } else { 20 }
             $displayNames = if ($failedCount -le $displayMax) { $failedList -join '; ' } else { ($failedList[0..($displayMax - 1)] -join '; ') + " ... and $($failedCount - $displayMax) more" }
             $details      = "$failedCount of $totalCount user(s) do not have MFA registered: $displayNames"
             return New-CISCheckResult `
@@ -145,6 +146,16 @@ function Test-CIS512-MFAAllUsers-Fallback {
         $failedList  = [System.Collections.Generic.List[string]]::new()
         $passedCount = 0
 
+        $maxUsers = if ($script:CISConfig.MfaFallbackMaxUsers) { $script:CISConfig.MfaFallbackMaxUsers } else { 500 }
+        if ($totalCount -gt $maxUsers) {
+            return New-CISCheckResult `
+                -ControlId $ControlDef.ControlId `
+                -Title $ControlDef.Title `
+                -Status 'WARNING' `
+                -Details "Tenant has $totalCount enabled users, exceeding fallback MFA check limit of $maxUsers. Use the primary Graph API endpoint (UserAuthenticationMethod.Read.All scope) for accurate results. Connect with: Connect-MgGraph -Scopes UserAuthenticationMethod.Read.All" `
+                -TotalResources $totalCount -PassedResources 0 -FailedResources 0
+        }
+
         # MFA-capable method type fragments (OData type contains these)
         $mfaMethodTypes = @(
             'Fido2', 'MicrosoftAuthenticator', 'PhoneAuthentication',
@@ -180,11 +191,17 @@ function Test-CIS512-MFAAllUsers-Fallback {
             catch {
                 $failedList.Add("$($user.DisplayName) [Error retrieving methods]")
             }
+
+            # Throttle to avoid rate limiting
+            $batchSize = if ($script:CISConfig.MfaFallbackBatchSize) { $script:CISConfig.MfaFallbackBatchSize } else { 50 }
+            if (($passedCount + $failedList.Count) % $batchSize -eq 0 -and ($passedCount + $failedList.Count) -gt 0) {
+                Start-Sleep -Milliseconds 500
+            }
         }
 
         $failedCount = $failedList.Count
         if ($failedCount -gt 0) {
-            $displayMax   = 20
+            $displayMax   = if ($script:CISConfig.MaxDisplayItems) { $script:CISConfig.MaxDisplayItems } else { 20 }
             $displayNames = if ($failedCount -le $displayMax) { $failedList -join '; ' } else { ($failedList[0..($displayMax - 1)] -join '; ') + " ... and $($failedCount - $displayMax) more" }
             $details      = "$failedCount of $totalCount user(s) do not have MFA-capable authentication methods registered (fallback check): $displayNames"
             return New-CISCheckResult `
@@ -341,11 +358,12 @@ function Test-CIS523-CustomAdminRoles {
             -FailedResources 0
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking custom admin roles: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking custom admin roles: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -403,11 +421,12 @@ function Test-CIS527-SubscriptionOwners {
             -FailedResources $ownerCount
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking subscription owners: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking subscription owners: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 

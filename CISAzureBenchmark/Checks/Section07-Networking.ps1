@@ -59,7 +59,8 @@ function Test-FlowLogRetention {
                     $retentionDays    = $flowLog.RetentionPolicy.Days
 
                     # Retention of 0 with enabled = true means indefinite (pass)
-                    if ($retentionEnabled -and ($retentionDays -ge 90 -or $retentionDays -eq 0)) {
+                    $minRetention = if ($script:CISConfig.RetentionThresholdDays) { $script:CISConfig.RetentionThresholdDays } else { 90 }
+                    if ($retentionEnabled -and ($retentionDays -ge $minRetention -or $retentionDays -eq 0)) {
                         $passedCount++
                     }
                     else {
@@ -88,7 +89,8 @@ function Test-FlowLogRetention {
 
         $failedCount = $failedList.Count
         if ($failedCount -gt 0) {
-            $details = "Found $failedCount of $totalCount $FlowLogType flow log(s) with retention < 90 days: $($failedList -join '; ')"
+            $retentionDaysDisplay = if ($script:CISConfig.RetentionThresholdDays) { $script:CISConfig.RetentionThresholdDays } else { 90 }
+            $details = "Found $failedCount of $totalCount $FlowLogType flow log(s) with retention < $retentionDaysDisplay days: $($failedList -join '; ')"
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
@@ -104,7 +106,7 @@ function Test-FlowLogRetention {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'PASS' `
-            -Details "All $totalCount $FlowLogType flow log(s) have retention >= 90 days." `
+            -Details "All $totalCount $FlowLogType flow log(s) have retention >= $retentionDaysDisplay days." `
             -TotalResources $totalCount `
             -PassedResources $passedCount `
             -FailedResources 0
@@ -166,15 +168,26 @@ function Test-CIS76-NetworkWatcher {
         }
 
         if ($usedRegions.Count -eq 0) {
-            # Fallback: get all resource locations
-            try {
-                $allResources = @(Get-AzResource -ErrorAction Stop | Select-Object -Property Location -Unique)
-                foreach ($res in $allResources) {
-                    if ($res.Location) { [void]$usedRegions.Add($res.Location) }
-                }
+            # Fallback: use locations from additional cached resources or Get-AzLocation
+            $storageAccounts = @($ResourceCache.StorageAccounts)
+            foreach ($sa in $storageAccounts) {
+                if ($sa.Location) { [void]$usedRegions.Add($sa.Location) }
             }
-            catch {
-                Write-Verbose "Failed to enumerate resource locations: $($_.Exception.Message)"
+            $keyVaults = @($ResourceCache.KeyVaults)
+            foreach ($kv in $keyVaults) {
+                if ($kv.Location) { [void]$usedRegions.Add($kv.Location) }
+            }
+            # Final fallback: Azure locations with resources
+            if ($usedRegions.Count -eq 0) {
+                try {
+                    $locations = @(Get-AzLocation -ErrorAction Stop | Where-Object { $_.RegionType -eq 'Physical' })
+                    foreach ($loc in $locations) {
+                        if ($loc.Location) { [void]$usedRegions.Add($loc.Location) }
+                    }
+                }
+                catch {
+                    Write-Verbose "Failed to enumerate Azure locations: $($_.Exception.Message)"
+                }
             }
         }
 

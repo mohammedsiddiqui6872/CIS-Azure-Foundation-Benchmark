@@ -2,7 +2,10 @@ function Initialize-CISResourceCache {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [hashtable[]]$ControlsToRun
+        [hashtable[]]$ControlsToRun,
+
+        [Parameter()]
+        [hashtable]$ExcludeResourceTag
     )
 
     $cache = @{
@@ -18,6 +21,8 @@ function Initialize-CISResourceCache {
         Subscriptions        = @()
         DiagnosticSettings   = @{}
         WebApps              = @()
+        BlobServiceProperties = @{}
+        FileServiceProperties = @{}
     }
 
     $patterns = $ControlsToRun | ForEach-Object { $_.CheckPattern } | Select-Object -Unique
@@ -45,6 +50,22 @@ function Initialize-CISResourceCache {
     if ($patterns | Where-Object { $_ -in @('StorageAccountProperty', 'StorageBlobProperty', 'StorageFileProperty', 'Custom') }) {
         $cache.StorageAccounts = Invoke-CacheFetch -ResourceType 'Storage Accounts' -FetchScript {
             Get-AzStorageAccount -ErrorAction Stop
+        }
+
+        # Pre-fetch blob and file service properties for cached storage accounts
+        if ($cache.StorageAccounts.Count -gt 0) {
+            Write-Verbose "Pre-fetching blob/file service properties for $($cache.StorageAccounts.Count) storage accounts..."
+            foreach ($sa in $cache.StorageAccounts) {
+                try {
+                    $ctx = $sa | New-AzStorageContext -ErrorAction Stop
+                    try {
+                        $cache.BlobServiceProperties[$sa.StorageAccountName] = Get-AzStorageBlobServiceProperty -StorageContext $ctx -ErrorAction Stop
+                    } catch { Write-Verbose "Could not get blob properties for $($sa.StorageAccountName): $($_.Exception.Message)" }
+                    try {
+                        $cache.FileServiceProperties[$sa.StorageAccountName] = Get-AzStorageFileServiceProperty -StorageContext $ctx -ErrorAction Stop
+                    } catch { Write-Verbose "Could not get file properties for $($sa.StorageAccountName): $($_.Exception.Message)" }
+                } catch { Write-Verbose "Could not create storage context for $($sa.StorageAccountName): $($_.Exception.Message)" }
+            }
         }
     }
 
@@ -93,6 +114,31 @@ function Initialize-CISResourceCache {
     }
 
     Write-CISProgress -Activity "Pre-fetching resources" -Status "Complete" -PercentComplete 100
+
+    # Apply tag-based exclusions if specified
+    if ($ExcludeResourceTag -and $ExcludeResourceTag.Count -gt 0) {
+        $tagFilterScript = {
+            param($resource)
+            if (-not $resource.Tags) { return $false }
+            foreach ($tagKey in $ExcludeResourceTag.Keys) {
+                if ($resource.Tags.ContainsKey($tagKey) -and $resource.Tags[$tagKey] -eq $ExcludeResourceTag[$tagKey]) {
+                    return $true
+                }
+            }
+            return $false
+        }
+        $excludableKeys = @('NSGs', 'StorageAccounts', 'KeyVaults', 'ApplicationGateways', 'VirtualNetworks', 'DatabricksWorkspaces')
+        foreach ($key in $excludableKeys) {
+            if ($cache[$key] -and $cache[$key].Count -gt 0) {
+                $before = $cache[$key].Count
+                $cache[$key] = @($cache[$key] | Where-Object { -not (& $tagFilterScript $_) })
+                $excluded = $before - $cache[$key].Count
+                if ($excluded -gt 0) {
+                    Write-Verbose "Excluded $excluded $key resource(s) by tag filter"
+                }
+            }
+        }
+    }
 
     return $cache
 }

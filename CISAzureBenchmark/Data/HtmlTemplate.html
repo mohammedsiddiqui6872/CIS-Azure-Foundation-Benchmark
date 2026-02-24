@@ -559,23 +559,6 @@ a:hover { text-decoration: underline; }
 .stat-card.info::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
 .stat-card.error::before { background: linear-gradient(90deg, #6b7280, #9ca3af); }
 
-.stat-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.stat-card.pass .stat-icon { background: var(--color-pass-bg); color: var(--color-pass); }
-.stat-card.fail .stat-icon { background: var(--color-fail-bg); color: var(--color-fail); }
-.stat-card.warning .stat-icon { background: var(--color-warning-bg); color: var(--color-warning); }
-.stat-card.info .stat-icon { background: var(--color-info-bg); color: var(--color-info); }
-.stat-card.error .stat-icon { background: var(--color-error-bg); color: var(--color-error); }
-
 .stat-number {
   font-size: 36px;
   font-weight: 800;
@@ -1551,27 +1534,22 @@ a:hover { text-decoration: underline; }
         <!-- Stat Cards -->
         <div class="stat-cards">
           <div class="stat-card pass animate-in animate-delay-1">
-            <div class="stat-icon">&#10003;</div>
             <div class="stat-number" id="statPass">{{PASS_COUNT}}</div>
             <div class="stat-label">Passed</div>
           </div>
           <div class="stat-card fail animate-in animate-delay-2">
-            <div class="stat-icon">&#10007;</div>
             <div class="stat-number" id="statFail">{{FAIL_COUNT}}</div>
             <div class="stat-label">Failed</div>
           </div>
           <div class="stat-card warning animate-in animate-delay-3">
-            <div class="stat-icon">&#9888;</div>
             <div class="stat-number" id="statWarning">{{WARNING_COUNT}}</div>
             <div class="stat-label">Warning</div>
           </div>
           <div class="stat-card info animate-in animate-delay-4">
-            <div class="stat-icon">&#8505;</div>
             <div class="stat-number" id="statInfo">{{INFO_COUNT}}</div>
             <div class="stat-label">Manual</div>
           </div>
           <div class="stat-card error animate-in animate-delay-5">
-            <div class="stat-icon">&#9679;</div>
             <div class="stat-number" id="statError">{{ERROR_COUNT}}</div>
             <div class="stat-label">Error</div>
           </div>

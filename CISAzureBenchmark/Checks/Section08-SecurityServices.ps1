@@ -83,11 +83,12 @@ function Test-CIS8133-EndpointProtection {
             -TotalResources 1 -PassedResources 0 -FailedResources 1
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking endpoint protection: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking endpoint protection: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -180,11 +181,12 @@ function Test-CIS8110-VMUpdateCheck {
             -TotalResources 1 -PassedResources 0 -FailedResources 1
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking VM update configuration: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking VM update configuration: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -249,11 +251,12 @@ function Test-CIS8112-SecurityContactRoles {
             -TotalResources 1 -PassedResources 0 -FailedResources 1
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking security contact roles: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking security contact roles: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -310,11 +313,12 @@ function Test-CIS8113-SecurityContactEmail {
             -TotalResources 1 -PassedResources 0 -FailedResources 1
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking security contact email: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking security contact email: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -374,11 +378,12 @@ function Test-CIS8114-AlertNotifications {
             -TotalResources 1 -PassedResources 0 -FailedResources 1
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking alert notifications: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking alert notifications: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -452,11 +457,12 @@ function Test-CIS8115-AttackPathNotifications {
             -TotalResources 1 -PassedResources 0 -FailedResources 1
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking attack path notifications: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking attack path notifications: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -541,11 +547,12 @@ function Test-CIS838-KeyVaultPrivateEndpoints {
             -FailedResources 0
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking Key Vault private endpoints: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking Key Vault private endpoints: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -652,11 +659,12 @@ function Test-CIS839-KeyRotation {
             -FailedResources 0
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking key rotation policies: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking key rotation policies: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -772,11 +780,12 @@ function Test-CIS8311-CertificateValidity {
             -FailedResources 0
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking certificate validity periods: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking certificate validity periods: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -820,11 +829,12 @@ function Test-CIS841-BastionHost {
             -TotalResources 0 -PassedResources 0 -FailedResources 1
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking for Bastion hosts: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking for Bastion hosts: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -915,10 +925,11 @@ function Test-CIS85-DDoSProtection {
             -FailedResources 0
     }
     catch {
+        $status = if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization') { 'WARNING' } else { 'ERROR' }
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
-            -Status 'ERROR' `
-            -Details "Error checking DDoS protection: $($_.Exception.Message)"
+            -Status $status `
+            -Details "$(if ($status -eq 'WARNING') { 'Insufficient permissions' } else { 'Error' }) checking DDoS protection: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
