@@ -46,7 +46,13 @@ function Export-CISReport {
         return
     }
 
-    $jsonData = Get-Content -Path $JsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    try {
+        $jsonData = Get-Content -Path $JsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        Write-Error "Failed to parse JSON file '$JsonPath': $($_.Exception.Message)"
+        return
+    }
 
     if (-not $OutputDirectory) {
         $OutputDirectory = Split-Path $JsonPath -Parent
@@ -83,12 +89,12 @@ function Export-CISReport {
             Description      = $_.description
             Details          = $_.details
             Remediation      = $_.remediation
-            AffectedResources = @($_.affectedResources)
+            AffectedResources = if ($_.affectedResources) { @($_.affectedResources) } else { @() }
             TotalResources   = $_.totalResources
             PassedResources  = $_.passedResources
             FailedResources  = $_.failedResources
-            References       = @($_.references)
-            CISControls      = @($_.cisControls)
+            References       = if ($_.references) { @($_.references) } else { @() }
+            CISControls      = if ($_.cisControls) { @($_.cisControls) } else { @() }
             Timestamp        = $_.timestamp
         }
     }

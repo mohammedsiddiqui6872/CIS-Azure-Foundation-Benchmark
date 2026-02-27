@@ -33,7 +33,7 @@ function Invoke-ResourceCheck {
                     -Status 'FAIL' `
                     -Details "No $ResourceTypeName found. This resource is required." `
                     -AffectedResources @("No $ResourceTypeName deployed") `
-                    -TotalResources 0 -PassedResources 0 -FailedResources 1
+                    -TotalResources 0 -PassedResources 0 -FailedResources 0
             }
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
@@ -51,12 +51,18 @@ function Invoke-ResourceCheck {
             # CheckScript receives $resource and should return:
             #   $null or empty string = PASS
             #   non-empty string = FAIL (the string is the failure reason)
-            $failureReason = & $CheckScript $resource
-            if ($failureReason) {
-                $failedList.Add([string]$failureReason)
+            try {
+                $failureReason = & $CheckScript $resource
+                if ($failureReason) {
+                    $failedList.Add([string]$failureReason)
+                }
+                else {
+                    $passedCount++
+                }
             }
-            else {
-                $passedCount++
+            catch {
+                $resourceName = if ($resource.Name) { $resource.Name } elseif ($resource.ResourceName) { $resource.ResourceName } else { 'Unknown' }
+                $failedList.Add("$resourceName [Error: $(Format-CISErrorMessage -Message $_.Exception.Message)]")
             }
         }
 
@@ -88,6 +94,6 @@ function Invoke-ResourceCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking ${ResourceTypeName}: $($_.Exception.Message)"
+            -Details "Error checking ${ResourceTypeName}: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }

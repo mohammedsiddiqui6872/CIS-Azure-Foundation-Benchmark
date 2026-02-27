@@ -51,8 +51,20 @@ function Invoke-CISAzureBenchmark {
     .EXAMPLE
         Invoke-CISAzureBenchmark -Section '7','8' -AssessmentStatus Automated
 
+    .PARAMETER Parallel
+        When used with -AllSubscriptions (or the default multi-subscription mode),
+        scans subscriptions concurrently using ForEach-Object -Parallel (PowerShell 7+ only).
+        Falls back to sequential scanning with a warning on PowerShell 5.1.
+
+    .PARAMETER ThrottleLimit
+        Maximum number of subscriptions to scan concurrently when -Parallel is specified.
+        Defaults to 5. Only effective when -Parallel is also specified.
+
     .EXAMPLE
         Invoke-CISAzureBenchmark -ProfileLevel 1 -OutputFormat HTML
+
+    .EXAMPLE
+        Invoke-CISAzureBenchmark -Parallel -ThrottleLimit 3 -OutputDirectory ./reports
     #>
     [CmdletBinding()]
     param(
@@ -90,24 +102,40 @@ function Invoke-CISAzureBenchmark {
         [switch]$AllSubscriptions,
 
         [Parameter()]
+        [switch]$Parallel,
+
+        [Parameter()]
+        [ValidateRange(1, 20)]
+        [int]$ThrottleLimit = 5,
+
+        [Parameter()]
         [switch]$SkipModuleCheck,
 
         [Parameter()]
         [string]$ConfigPath,
 
         [Parameter()]
-        [hashtable]$ExcludeResourceTag
+        [hashtable]$ExcludeResourceTag,
+
+        [Parameter()]
+        [switch]$NoAutoOpen
     )
 
     $ErrorActionPreference = 'Continue'
     $startTime = Get-Date
 
     # Suppress noisy Azure module deprecation/breaking change warnings
+    $savedEnvVar = $env:SuppressAzurePowerShellBreakingChangeWarnings
     $env:SuppressAzurePowerShellBreakingChangeWarnings = 'true'
     $savedWarningPref = $WarningPreference
     $WarningPreference = 'SilentlyContinue'
     try { Update-AzConfig -DisplayBreakingChangeWarning $false -ErrorAction SilentlyContinue | Out-Null } catch { }
 
+    # Reset progress timing for accurate ETA in this run
+    $script:CISProgressTimes = [System.Collections.Generic.List[double]]::new()
+    $script:CISProgressLastCheck = $null
+
+  try {
     # Load config overrides if specified
     if ($ConfigPath) {
         Set-CISConfigOverride -ConfigPath $ConfigPath
@@ -121,7 +149,9 @@ function Invoke-CISAzureBenchmark {
     Write-Host '    CIS Microsoft Azure Foundations Benchmark      ' -ForegroundColor Cyan -NoNewline
     Write-Host '|' -ForegroundColor DarkCyan
     Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
-    Write-Host '             v5.0.0  |  155 Controls               ' -ForegroundColor White -NoNewline
+    $versionStr = "$($script:CISBenchmarkVersion)  |  155 Controls"
+    $versionPad = ' ' * [math]::Max(0, 45 - $versionStr.Length)
+    Write-Host "             $versionStr$versionPad" -ForegroundColor White -NoNewline
     Write-Host '|' -ForegroundColor DarkCyan
     Write-Host '  |                                                            |' -ForegroundColor DarkCyan
     Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
@@ -140,8 +170,18 @@ function Invoke-CISAzureBenchmark {
         return
     }
 
-    $definitions = Import-PowerShellDataFile -Path $defPath
+    try {
+        $definitions = Import-PowerShellDataFile -Path $defPath
+    }
+    catch {
+        Write-Error "Failed to parse control definitions file '$defPath': $($_.Exception.Message)"
+        return
+    }
     $allControls = $definitions.Controls
+    if (-not $allControls -or $allControls.Count -eq 0) {
+        Write-Error "Control definitions file is missing or has an empty 'Controls' key."
+        return
+    }
     Write-Host "  Loaded $($allControls.Count) control definitions" -ForegroundColor Green
 
     # ----------------------------------------------------------------
@@ -220,92 +260,143 @@ function Invoke-CISAzureBenchmark {
     $primaryMetadata = $null
     $subIndex = 0
 
-    foreach ($targetSub in $subscriptionsToScan) {
-        $subIndex++
-
-        # Switch subscription context if multi-sub mode
-        $currentSubId = $SubscriptionId
-        if ($AllSubscriptions -and $targetSub) {
-            $currentSubId = $targetSub.Id
-            Write-Host "  [$subIndex/$($subscriptionsToScan.Count)] Switching to: $($targetSub.Name)" -ForegroundColor Yellow
-            Set-AzContext -SubscriptionId $targetSub.Id -ErrorAction SilentlyContinue | Out-Null
+    # Determine whether to use parallel scanning
+    $useParallel = $false
+    if ($Parallel -and $AllSubscriptions -and $subscriptionsToScan.Count -gt 1) {
+        if ($PSVersionTable.PSVersion.Major -ge 7) {
+            $useParallel = $true
+            Write-Host "  Parallel scanning enabled (ThrottleLimit: $ThrottleLimit)" -ForegroundColor Cyan
+        } else {
+            Write-Warning "Parallel scanning requires PowerShell 7+. Current version: $($PSVersionTable.PSVersion). Falling back to sequential scanning."
         }
+    }
 
-        # Initialize environment
-        Write-CISProgress -Activity "Initializing" -Status "Validating environment..."
+    if ($useParallel) {
+        # ============================================================
+        # PARALLEL multi-subscription scan (PowerShell 7+ only)
+        # ============================================================
+        # Use a thread-safe ConcurrentDictionary for per-sub data and ConcurrentBag for combined results
+        $parallelMultiSubData = [System.Collections.Concurrent.ConcurrentDictionary[string, hashtable]]::new()
+        $parallelCombinedResults = [System.Collections.Concurrent.ConcurrentBag[PSCustomObject]]::new()
+        $parallelPrimaryMeta = [System.Collections.Concurrent.ConcurrentDictionary[string, hashtable]]::new()
 
-        $envInfo = Initialize-CISEnvironment `
-            -SubscriptionId $currentSubId `
-            -SkipModuleCheck:$SkipModuleCheck `
-            -ControlsToRun $controls
+        # Capture the module base path so parallel runspaces can import the module
+        $moduleBasePath = $PSScriptRoot | Split-Path -Parent
+        $psd1Path = Join-Path $moduleBasePath 'CISAzureBenchmark.psd1'
 
-        if (-not $envInfo.IsValid) {
-            if ($AllSubscriptions) {
-                Write-Warning "Skipping subscription $currentSubId - initialization failed"
-                foreach ($err in $envInfo.Errors) { Write-Warning "  $err" }
-                continue
-            } else {
-                foreach ($err in $envInfo.Errors) { Write-Error $err }
-                return
+        Write-Host "  Launching parallel scans for $($subscriptionsToScan.Count) subscriptions..." -ForegroundColor Yellow
+        Write-Host ""
+
+        $subscriptionsToScan | ForEach-Object -Parallel {
+            $targetSub = $_
+            $subId = $targetSub.Id
+            $subName = $targetSub.Name
+
+            # Access thread-safe collections via $using: scope
+            $bag = $using:parallelCombinedResults
+            $subDataDict = $using:parallelMultiSubData
+            $metaDict = $using:parallelPrimaryMeta
+            $controlDefs = $using:controls
+            $skipMod = $using:SkipModuleCheck
+            $excludeTag = $using:ExcludeResourceTag
+            $modPath = $using:psd1Path
+
+            # Import the module in this runspace so all private functions are available
+            Import-Module $modPath -Force -ErrorAction Stop
+
+            # Suppress Azure deprecation warnings in this runspace
+            $env:SuppressAzurePowerShellBreakingChangeWarnings = 'true'
+            $WarningPreference = 'SilentlyContinue'
+            try { Update-AzConfig -DisplayBreakingChangeWarning $false -ErrorAction SilentlyContinue | Out-Null } catch { }
+
+            # Each parallel runspace must set its own Az context
+            Set-AzContext -SubscriptionId $subId -ErrorAction Stop | Out-Null
+
+            # Initialize environment for this subscription
+            $envInfo = Initialize-CISEnvironment `
+                -SubscriptionId $subId `
+                -SkipModuleCheck:$skipMod `
+                -ControlsToRun $controlDefs
+
+            if (-not $envInfo.IsValid) {
+                Write-Warning "[$subName] Skipping - initialization failed"
+                foreach ($err in $envInfo.Errors) { Write-Warning "  [$subName] $err" }
+                return  # continue in parallel context
             }
-        }
 
-        foreach ($warn in $envInfo.Warnings) { Write-Warning $warn }
-
-        if (-not $primaryMetadata) {
-            $primaryMetadata = @{
+            # Store primary metadata from the first subscription to complete
+            [void]$metaDict.TryAdd('first', @{
                 SubscriptionName = $envInfo.SubscriptionName
                 SubscriptionId   = $envInfo.SubscriptionId
                 TenantId         = $envInfo.TenantId
                 ScanTimestamp    = $envInfo.ScanTimestamp
+            })
+
+            Write-Host "  [$subName] Pre-fetching Azure resources..." -ForegroundColor Yellow
+            $cacheParams = @{ ControlsToRun = $controlDefs }
+            if ($excludeTag) { $cacheParams.ExcludeResourceTag = $excludeTag }
+            $resourceCache = Initialize-CISResourceCache @cacheParams
+            Write-Host "  [$subName] Resource cache ready" -ForegroundColor Green
+
+            # Execute checks
+            Write-Host "  [$subName] Running compliance checks..." -ForegroundColor Yellow
+            $subResults = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+            foreach ($ctrl in $controlDefs) {
+                $result = Invoke-CISCheckSafely `
+                    -ControlDef $ctrl `
+                    -ResourceCache $resourceCache `
+                    -EnvironmentInfo $envInfo
+
+                if ($result) {
+                    $subResults.Add($result)
+                    $bag.Add($result)
+                }
             }
-        }
 
-        Write-Host "  Subscription: $($envInfo.SubscriptionName) ($($envInfo.SubscriptionId))" -ForegroundColor Cyan
-        Write-Host "  Tenant:       $($envInfo.TenantId)" -ForegroundColor Cyan
-        Write-Host ""
-
-        # Pre-fetch resources
-        Write-Host "  Pre-fetching Azure resources..." -ForegroundColor Yellow
-        $cacheParams = @{ ControlsToRun = $controls }
-        if ($ExcludeResourceTag) { $cacheParams.ExcludeResourceTag = $ExcludeResourceTag }
-        $resourceCache = Initialize-CISResourceCache @cacheParams
-        Write-Host "  Resource cache ready" -ForegroundColor Green
-        Write-Host ""
-
-        # Execute checks
-        Write-Host "  Running compliance checks..." -ForegroundColor Yellow
-        $subResults = [System.Collections.Generic.List[PSCustomObject]]::new()
-        $checkCount = 0
-        $script:CISCheckStartTime = Get-Date
-
-        foreach ($ctrl in $controls) {
-            $checkCount++
-            $prefix = if ($AllSubscriptions) { "[$subIndex/$($subscriptionsToScan.Count)] " } else { "" }
-            Write-CISProgress -Activity "${prefix}Running checks" `
-                -Status "$($ctrl.ControlId) - $($ctrl.Title)" `
-                -Current $checkCount -Total $controls.Count
-
-            $result = Invoke-CISCheckSafely `
-                -ControlDef $ctrl `
-                -ResourceCache $resourceCache `
-                -EnvironmentInfo $envInfo
-
-            if ($result) {
-                $subResults.Add($result)
-                $combinedResults.Add($result)
+            # Post-process: convert false PASSes from failed cache fetches to WARNING
+            if ($resourceCache.FailedResourceTypes -and $resourceCache.FailedResourceTypes.Count -gt 0) {
+                $resourceDependencyMap = @{
+                    'Network Security Groups' = @('NSGPortCheck')
+                    'Storage Accounts'        = @('StorageAccountProperty', 'StorageBlobProperty', 'StorageFileProperty')
+                    'Key Vaults'              = @('KeyVaultProperty', 'KeyVaultKeyExpiry', 'KeyVaultSecretExpiry')
+                    'Activity Log Alerts'     = @('ActivityLogAlert')
+                    'Application Gateways'    = @('_section:Networking Services')
+                    'Virtual Networks'        = @('_section:Networking Services')
+                    'Network Watchers'        = @('_section:Networking Services')
+                    'Databricks Workspaces'   = @('_section:Analytics Services')
+                }
+                $affectedPatterns  = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                $affectedSections  = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                foreach ($failedType in $resourceCache.FailedResourceTypes) {
+                    if ($resourceDependencyMap.ContainsKey($failedType)) {
+                        foreach ($dep in $resourceDependencyMap[$failedType]) {
+                            if ($dep.StartsWith('_section:')) {
+                                [void]$affectedSections.Add($dep.Substring(9))
+                            } else {
+                                [void]$affectedPatterns.Add($dep)
+                            }
+                        }
+                    }
+                }
+                foreach ($r in $subResults) {
+                    if ($r.Status -eq 'PASS' -and $r.TotalResources -eq 0) {
+                        $c = $controlDefs | Where-Object { $_.ControlId -eq $r.ControlId } | Select-Object -First 1
+                        if ($c -and (($c.CheckPattern -and $affectedPatterns.Contains($c.CheckPattern)) -or
+                                        ($c.Section -and $affectedSections.Contains($c.Section)))) {
+                            $r.Status = 'WARNING'
+                            $r.Details = "Resource fetch failed for this check's dependencies. Result may be inaccurate. Original: $($r.Details)"
+                        }
+                    }
+                }
             }
-        }
 
-        Write-Progress -Activity "CIS Azure Benchmark v5.0.0" -Completed
-
-        # Store per-subscription data for multi-sub HTML
-        if ($AllSubscriptions -and $targetSub) {
-            $multiSubData[$envInfo.SubscriptionId] = @{
+            # Store per-subscription data
+            [void]$subDataDict.TryAdd($envInfo.SubscriptionId, @{
                 Name     = $envInfo.SubscriptionName
                 TenantId = $envInfo.TenantId
                 Results  = $subResults.ToArray()
-            }
+            })
 
             # Per-subscription summary
             $subPass = ($subResults | Where-Object Status -eq 'PASS').Count
@@ -315,9 +406,170 @@ function Invoke-CISAzureBenchmark {
             $subError = ($subResults | Where-Object Status -eq 'ERROR').Count
             $subDenom = $subResults.Count - $subInfo - $subWarn
             $subScore = if ($subDenom -gt 0) { [math]::Round(($subPass / $subDenom) * 100, 1) } else { 0 }
+            $scoreColor = if ($subScore -ge 80) { 'Green' } elseif ($subScore -ge 50) { 'Yellow' } else { 'Red' }
             Write-Host ""
-            Write-Host "  [$($envInfo.SubscriptionName)] Score: $subScore% | Pass: $subPass | Fail: $subFail | Error: $subError" -ForegroundColor $(if ($subScore -ge 80) { 'Green' } elseif ($subScore -ge 50) { 'Yellow' } else { 'Red' })
+            Write-Host "  [$subName] Score: $subScore% | Pass: $subPass | Fail: $subFail | Error: $subError" -ForegroundColor $scoreColor
             Write-Host ""
+
+        } -ThrottleLimit $ThrottleLimit
+
+        # Transfer parallel results back to the main-thread collections
+        foreach ($kvp in $parallelMultiSubData.GetEnumerator()) {
+            $multiSubData[$kvp.Key] = $kvp.Value
+        }
+        foreach ($r in $parallelCombinedResults) {
+            $combinedResults.Add($r)
+        }
+        if ($parallelPrimaryMeta.ContainsKey('first')) {
+            $primaryMetadata = $parallelPrimaryMeta['first']
+        }
+
+    } else {
+        # ============================================================
+        # SEQUENTIAL scan (default, or PS 5.1 fallback)
+        # ============================================================
+        foreach ($targetSub in $subscriptionsToScan) {
+            $subIndex++
+
+            # Switch subscription context if multi-sub mode
+            $currentSubId = $SubscriptionId
+            if ($AllSubscriptions -and $targetSub) {
+                $currentSubId = $targetSub.Id
+                Write-Host "  [$subIndex/$($subscriptionsToScan.Count)] Switching to: $($targetSub.Name)" -ForegroundColor Yellow
+                Set-AzContext -SubscriptionId $targetSub.Id -ErrorAction SilentlyContinue | Out-Null
+            }
+
+            # Initialize environment
+            Write-CISProgress -Activity "Initializing" -Status "Validating environment..."
+
+            $envInfo = Initialize-CISEnvironment `
+                -SubscriptionId $currentSubId `
+                -SkipModuleCheck:$SkipModuleCheck `
+                -ControlsToRun $controls
+
+            if (-not $envInfo.IsValid) {
+                if ($AllSubscriptions) {
+                    Write-Warning "Skipping subscription $currentSubId - initialization failed"
+                    foreach ($err in $envInfo.Errors) { Write-Warning "  $err" }
+                    continue
+                } else {
+                    foreach ($err in $envInfo.Errors) { Write-Error $err }
+                    return
+                }
+            }
+
+            foreach ($warn in $envInfo.Warnings) { Write-Warning $warn }
+
+            if (-not $primaryMetadata) {
+                $primaryMetadata = @{
+                    SubscriptionName = $envInfo.SubscriptionName
+                    SubscriptionId   = $envInfo.SubscriptionId
+                    TenantId         = $envInfo.TenantId
+                    ScanTimestamp    = $envInfo.ScanTimestamp
+                }
+            }
+
+            Write-Host "  Subscription: $($envInfo.SubscriptionName) ($($envInfo.SubscriptionId))" -ForegroundColor Cyan
+            Write-Host "  Tenant:       $($envInfo.TenantId)" -ForegroundColor Cyan
+            Write-Host ""
+
+            # Pre-fetch resources
+            Write-Host "  Pre-fetching Azure resources..." -ForegroundColor Yellow
+            $cacheParams = @{ ControlsToRun = $controls }
+            if ($ExcludeResourceTag) { $cacheParams.ExcludeResourceTag = $ExcludeResourceTag }
+            $resourceCache = Initialize-CISResourceCache @cacheParams
+            if ($resourceCache.FetchWarnings -and $resourceCache.FetchWarnings.Count -gt 0) {
+                # Temporarily restore warning preference to show critical cache warnings
+                $WarningPreference = $savedWarningPref
+                foreach ($fw in $resourceCache.FetchWarnings) { Write-Warning $fw }
+                $WarningPreference = 'SilentlyContinue'
+            }
+            Write-Host "  Resource cache ready" -ForegroundColor Green
+            Write-Host ""
+
+            # Execute checks
+            Write-Host "  Running compliance checks..." -ForegroundColor Yellow
+            $subResults = [System.Collections.Generic.List[PSCustomObject]]::new()
+            $checkCount = 0
+
+            foreach ($ctrl in $controls) {
+                $checkCount++
+                $prefix = if ($AllSubscriptions) { "[$subIndex/$($subscriptionsToScan.Count)] " } else { "" }
+                Write-CISProgress -Activity "${prefix}Running checks" `
+                    -Status "$($ctrl.ControlId) - $($ctrl.Title)" `
+                    -Current $checkCount -Total $controls.Count
+
+                $result = Invoke-CISCheckSafely `
+                    -ControlDef $ctrl `
+                    -ResourceCache $resourceCache `
+                    -EnvironmentInfo $envInfo
+
+                if ($result) {
+                    $subResults.Add($result)
+                    $combinedResults.Add($result)
+                }
+            }
+
+            Write-Progress -Activity "CIS Azure Benchmark $($script:CISBenchmarkVersion)" -Completed
+
+            # Post-process: convert false PASSes from failed cache fetches to WARNING
+            if ($resourceCache.FailedResourceTypes -and $resourceCache.FailedResourceTypes.Count -gt 0) {
+                # Map resource types to check patterns/sections that depend on them
+                $resourceDependencyMap = @{
+                    'Network Security Groups' = @('NSGPortCheck')
+                    'Storage Accounts'        = @('StorageAccountProperty', 'StorageBlobProperty', 'StorageFileProperty')
+                    'Key Vaults'              = @('KeyVaultProperty', 'KeyVaultKeyExpiry', 'KeyVaultSecretExpiry')
+                    'Activity Log Alerts'     = @('ActivityLogAlert')
+                    'Application Gateways'    = @('_section:Networking Services')
+                    'Virtual Networks'        = @('_section:Networking Services')
+                    'Network Watchers'        = @('_section:Networking Services')
+                    'Databricks Workspaces'   = @('_section:Analytics Services')
+                }
+                $affectedPatterns  = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                $affectedSections  = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                foreach ($failedType in $resourceCache.FailedResourceTypes) {
+                    if ($resourceDependencyMap.ContainsKey($failedType)) {
+                        foreach ($dep in $resourceDependencyMap[$failedType]) {
+                            if ($dep.StartsWith('_section:')) {
+                                [void]$affectedSections.Add($dep.Substring(9))
+                            } else {
+                                [void]$affectedPatterns.Add($dep)
+                            }
+                        }
+                    }
+                }
+                foreach ($r in $subResults) {
+                    if ($r.Status -eq 'PASS' -and $r.TotalResources -eq 0) {
+                        $ctrl = $controls | Where-Object { $_.ControlId -eq $r.ControlId } | Select-Object -First 1
+                        if ($ctrl -and (($ctrl.CheckPattern -and $affectedPatterns.Contains($ctrl.CheckPattern)) -or
+                                        ($ctrl.Section -and $affectedSections.Contains($ctrl.Section)))) {
+                            $r.Status = 'WARNING'
+                            $r.Details = "Resource fetch failed for this check's dependencies. Result may be inaccurate. Original: $($r.Details)"
+                        }
+                    }
+                }
+            }
+
+            # Store per-subscription data for multi-sub HTML
+            if ($AllSubscriptions -and $targetSub) {
+                $multiSubData[$envInfo.SubscriptionId] = @{
+                    Name     = $envInfo.SubscriptionName
+                    TenantId = $envInfo.TenantId
+                    Results  = $subResults.ToArray()
+                }
+
+                # Per-subscription summary
+                $subPass = ($subResults | Where-Object Status -eq 'PASS').Count
+                $subFail = ($subResults | Where-Object Status -eq 'FAIL').Count
+                $subInfo = ($subResults | Where-Object Status -eq 'INFO').Count
+                $subWarn = ($subResults | Where-Object Status -eq 'WARNING').Count
+                $subError = ($subResults | Where-Object Status -eq 'ERROR').Count
+                $subDenom = $subResults.Count - $subInfo - $subWarn
+                $subScore = if ($subDenom -gt 0) { [math]::Round(($subPass / $subDenom) * 100, 1) } else { 0 }
+                Write-Host ""
+                Write-Host "  [$($envInfo.SubscriptionName)] Score: $subScore% | Pass: $subPass | Fail: $subFail | Error: $subError" -ForegroundColor $(if ($subScore -ge 80) { 'Green' } elseif ($subScore -ge 50) { 'Yellow' } else { 'Red' })
+                Write-Host ""
+            }
         }
     }
 
@@ -327,14 +579,20 @@ function Invoke-CISAzureBenchmark {
     # ----------------------------------------------------------------
     # 5. Summary
     # ----------------------------------------------------------------
-    $passCount    = ($allResults | Where-Object Status -eq 'PASS').Count
-    $failCount    = ($allResults | Where-Object Status -eq 'FAIL').Count
-    $warningCount = ($allResults | Where-Object Status -eq 'WARNING').Count
-    $infoCount    = ($allResults | Where-Object Status -eq 'INFO').Count
-    $errorCount   = ($allResults | Where-Object Status -eq 'ERROR').Count
+    # Single-pass counting for efficiency
+    $passCount = 0; $failCount = 0; $warningCount = 0; $infoCount = 0; $errorCount = 0
+    foreach ($r in $allResults) {
+        switch ($r.Status) {
+            'PASS'    { $passCount++ }
+            'FAIL'    { $failCount++ }
+            'WARNING' { $warningCount++ }
+            'INFO'    { $infoCount++ }
+            'ERROR'   { $errorCount++ }
+        }
+    }
 
-    # Score excludes INFO (manual checks) and WARNING (indeterminate) from denominator
-    $scoreDenom = $allResults.Count - $infoCount - $warningCount
+    # Score excludes INFO (manual checks), WARNING (indeterminate), and ERROR (broken checks) from denominator
+    $scoreDenom = $allResults.Count - $infoCount - $warningCount - $errorCount
     $score = if ($scoreDenom -gt 0) { [math]::Round(($passCount / $scoreDenom) * 100, 1) } else { -1 }
 
     Write-Host ""
@@ -381,7 +639,7 @@ function Invoke-CISAzureBenchmark {
         $subName = if ($metadata.SubscriptionName) { $metadata.SubscriptionName } else { 'Unknown' }
         $safeSub = if ($AllSubscriptions) { "AllSubscriptions" } else { $subName -replace '[^\w\-]', '_' }
         $dateStamp = (Get-Date).ToString('yyyyMMdd-HHmmss')
-        $ReportName = "CIS-Azure-v5.0.0_${safeSub}_${dateStamp}"
+        $ReportName = "CIS-Azure-$($script:CISBenchmarkVersion)_${safeSub}_${dateStamp}"
     }
 
     $formats = if ('All' -in $OutputFormat) { @('HTML', 'JSON', 'CSV', 'SARIF') } else { $OutputFormat }
@@ -442,12 +700,13 @@ function Invoke-CISAzureBenchmark {
 
     Write-Host ''
     Write-Host '  +============================================================+' -ForegroundColor DarkCyan
-    Write-Host '  |                       SCAN COMPLETE                         |' -ForegroundColor DarkCyan
+    Write-Host '  |                       SCAN COMPLETE                        |' -ForegroundColor DarkCyan
     Write-Host '  +============================================================+' -ForegroundColor DarkCyan
+    $boxWidth = 60  # inner width between | and |
     Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
-    Write-Host "  Score: $scoreDisplay" -ForegroundColor $scoreColor -NoNewline
-    $scorePad = [math]::Max(0, 52 - "Score: $scoreDisplay".Length)
-    Write-Host (' ' * $scorePad) -NoNewline
+    $scoreContent = "  Score: $scoreDisplay"
+    Write-Host $scoreContent -ForegroundColor $scoreColor -NoNewline
+    Write-Host (' ' * [math]::Max(0, $boxWidth - $scoreContent.Length)) -NoNewline
     Write-Host '|' -ForegroundColor DarkCyan
     Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
     Write-Host "  PASS: $passCount  " -ForegroundColor Green -NoNewline
@@ -455,22 +714,21 @@ function Invoke-CISAzureBenchmark {
     Write-Host "WARN: $warningCount  " -ForegroundColor Yellow -NoNewline
     Write-Host "INFO: $infoCount  " -ForegroundColor Gray -NoNewline
     Write-Host "ERR: $errorCount" -ForegroundColor Magenta -NoNewline
-    $statLine = "PASS: $passCount  FAIL: $failCount  WARN: $warningCount  INFO: $infoCount  ERR: $errorCount"
-    $statPad = [math]::Max(0, 54 - $statLine.Length)
-    Write-Host (' ' * $statPad) -NoNewline
+    $statLine = "  PASS: $passCount  FAIL: $failCount  WARN: $warningCount  INFO: $infoCount  ERR: $errorCount"
+    Write-Host (' ' * [math]::Max(0, $boxWidth - $statLine.Length)) -NoNewline
     Write-Host '|' -ForegroundColor DarkCyan
     Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
-    Write-Host "  Duration: $elapsedDisplay" -ForegroundColor White -NoNewline
-    $durPad = [math]::Max(0, 52 - "Duration: $elapsedDisplay".Length)
-    Write-Host (' ' * $durPad) -NoNewline
+    $durContent = "  Duration: $elapsedDisplay"
+    Write-Host $durContent -ForegroundColor White -NoNewline
+    Write-Host (' ' * [math]::Max(0, $boxWidth - $durContent.Length)) -NoNewline
     Write-Host '|' -ForegroundColor DarkCyan
     Write-Host '  +------------------------------------------------------------+' -ForegroundColor DarkCyan
-    Write-Host '  |  Report Files:                                              |' -ForegroundColor DarkCyan
+    Write-Host '  |  Report Files:                                             |' -ForegroundColor DarkCyan
     foreach ($fmt in $reportPaths.Keys) {
         $fullPath = (Resolve-Path $reportPaths[$fmt]).Path
         $line = "  $($fmt.PadRight(6)) $fullPath"
-        if ($line.Length -gt 56) { $line = $line.Substring(0, 53) + '...' }
-        $linePad = [math]::Max(0, 56 - $line.Length)
+        if ($line.Length -gt $boxWidth) { $line = $line.Substring(0, $boxWidth - 3) + '...' }
+        $linePad = [math]::Max(0, $boxWidth - $line.Length)
         Write-Host '  |' -ForegroundColor DarkCyan -NoNewline
         Write-Host "$line" -ForegroundColor White -NoNewline
         Write-Host (' ' * $linePad) -NoNewline
@@ -482,7 +740,7 @@ function Invoke-CISAzureBenchmark {
     Write-Host ''
 
     # Auto-open HTML report
-    if ($reportPaths.ContainsKey('HTML') -and (Test-Path $reportPaths.HTML)) {
+    if (-not $NoAutoOpen -and $reportPaths.ContainsKey('HTML') -and (Test-Path $reportPaths.HTML)) {
         try {
             Start-Process (Resolve-Path $reportPaths.HTML).Path
         }
@@ -513,4 +771,15 @@ function Invoke-CISAzureBenchmark {
     $resultObj | Add-Member MemberSet PSStandardMembers ([System.Management.Automation.PSMemberInfo[]]@($defaultSet))
 
     return $resultObj
+
+  } # end try
+  finally {
+    # Always restore warning preference and env vars, even on Ctrl+C or early return
+    $WarningPreference = $savedWarningPref
+    if ($null -eq $savedEnvVar) {
+        Remove-Item Env:\SuppressAzurePowerShellBreakingChangeWarnings -ErrorAction SilentlyContinue
+    } else {
+        $env:SuppressAzurePowerShellBreakingChangeWarnings = $savedEnvVar
+    }
+  }
 }

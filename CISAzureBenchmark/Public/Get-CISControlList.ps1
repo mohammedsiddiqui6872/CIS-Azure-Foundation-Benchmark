@@ -101,5 +101,15 @@ function Get-CISControlList {
             Severity         = $_.Severity
             CheckPattern     = $_.CheckPattern
         }
-    } | Sort-Object { [version]($_.ControlId -replace '[^\d.]', '' -replace '\.+$', '' -replace '^\.+', '') }
+    } | Sort-Object {
+        # Custom numerical sort: split on dots and compare each segment as integers
+        $digits = ($_.ControlId -replace '[^\d.]', '' -replace '\.+$', '' -replace '^\.+', '')
+        $segments = $digits -split '\.' | ForEach-Object {
+            if ($_ -match '^\d+$') { [int]$_ } else { 0 }
+        }
+        # Pad to 6 segments so all IDs compare at consistent depth
+        while ($segments.Count -lt 6) { $segments += 0 }
+        # Return a formatted string that sorts lexicographically as integers would
+        ($segments | ForEach-Object { $_.ToString('D10') }) -join '.'
+    }
 }

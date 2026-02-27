@@ -46,7 +46,7 @@ function Invoke-CISCheckSafely {
             -AssessmentStatus $ControlDef.AssessmentStatus `
             -ProfileLevel $ControlDef.ProfileLevel `
             -Description $ControlDef.Description `
-            -Details "Check failed with error: $($_.Exception.Message)" `
+            -Details "Check failed with error: $(Format-CISErrorMessage -Message $_.Exception.Message)" `
             -Remediation $ControlDef.Remediation `
             -References $ControlDef.References `
             -CISControls $ControlDef.CISControls
@@ -73,15 +73,15 @@ function Invoke-CISControlCheck {
         'StorageAccountProperty' { Invoke-StorageAccountPropertyCheck -ControlDef $ControlDef -CachedStorageAccounts $ResourceCache.StorageAccounts }
         'StorageBlobProperty'    { Invoke-StorageBlobPropertyCheck -ControlDef $ControlDef -CachedStorageAccounts $ResourceCache.StorageAccounts -CachedBlobProperties $ResourceCache.BlobServiceProperties }
         'StorageFileProperty'    { Invoke-StorageFilePropertyCheck -ControlDef $ControlDef -CachedStorageAccounts $ResourceCache.StorageAccounts -CachedFileProperties $ResourceCache.FileServiceProperties }
-        'KeyVaultProperty'       { Invoke-KeyVaultPropertyCheck -ControlDef $ControlDef -CachedKeyVaults $ResourceCache.KeyVaults }
-        'KeyVaultKeyExpiry'      { Invoke-KeyVaultKeyExpiryCheck -ControlDef $ControlDef -CachedKeyVaults $ResourceCache.KeyVaults }
-        'KeyVaultSecretExpiry'   { Invoke-KeyVaultSecretExpiryCheck -ControlDef $ControlDef -CachedKeyVaults $ResourceCache.KeyVaults }
+        'KeyVaultProperty'       { Invoke-KeyVaultPropertyCheck -ControlDef $ControlDef -CachedKeyVaults $ResourceCache.KeyVaults -CachedKeyVaultDetails $ResourceCache.KeyVaultDetails }
+        'KeyVaultKeyExpiry'      { Invoke-KeyVaultKeyExpiryCheck -ControlDef $ControlDef -CachedKeyVaults $ResourceCache.KeyVaults -CachedKeyVaultDetails $ResourceCache.KeyVaultDetails }
+        'KeyVaultSecretExpiry'   { Invoke-KeyVaultSecretExpiryCheck -ControlDef $ControlDef -CachedKeyVaults $ResourceCache.KeyVaults -CachedKeyVaultDetails $ResourceCache.KeyVaultDetails }
         'DiagnosticSetting'      { Invoke-DiagnosticSettingCheck -ControlDef $ControlDef -ResourceCache $ResourceCache }
         'GraphAPIProperty'       { Invoke-GraphAPIPropertyCheck -ControlDef $ControlDef -EnvironmentInfo $EnvironmentInfo }
         'ManualCheck'            { Invoke-ManualCheck -ControlDef $ControlDef }
         'Custom' {
             $fnName = $ControlDef.CheckFunction
-            if ($fnName -and (Get-Command $fnName -ErrorAction SilentlyContinue)) {
+            if ($fnName -and $fnName -match '^(Test-CIS|Invoke-CIS)' -and (Get-Command $fnName -ErrorAction SilentlyContinue)) {
                 & $fnName -ControlDef $ControlDef -ResourceCache $ResourceCache
             }
             else {
@@ -89,7 +89,7 @@ function Invoke-CISControlCheck {
                     -ControlId $ControlDef.ControlId `
                     -Title $ControlDef.Title `
                     -Status 'ERROR' `
-                    -Details "Custom check function '$fnName' not found."
+                    -Details "Custom check function '$fnName' not found or does not match allowed naming convention (Test-CIS*/Invoke-CIS*)."
             }
         }
         default {

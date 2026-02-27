@@ -127,7 +127,7 @@ function Test-FlowLogRetention {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking $FlowLogType flow log retention: $($_.Exception.Message)"
+            -Details "Error checking $FlowLogType flow log retention: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -188,18 +188,9 @@ function Test-CIS76-NetworkWatcher {
             foreach ($kv in $keyVaults) {
                 if ($kv.Location) { [void]$usedRegions.Add($kv.Location) }
             }
-            # Final fallback: Azure locations with resources
-            if ($usedRegions.Count -eq 0) {
-                try {
-                    $locations = @(Get-AzLocation -ErrorAction Stop | Where-Object { $_.RegionType -eq 'Physical' })
-                    foreach ($loc in $locations) {
-                        if ($loc.Location) { [void]$usedRegions.Add($loc.Location) }
-                    }
-                }
-                catch {
-                    Write-Verbose "Failed to enumerate Azure locations: $($_.Exception.Message)"
-                }
-            }
+            # No resources found in any cache — cannot determine which regions are in use.
+            # Do NOT fall back to Get-AzLocation as that returns ALL Azure regions,
+            # which would produce false failures for regions where no resources exist.
         }
 
         if ($usedRegions.Count -eq 0) {
@@ -257,7 +248,7 @@ function Test-CIS76-NetworkWatcher {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Network Watcher coverage: $($_.Exception.Message)"
+            -Details "Error checking Network Watcher coverage: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -357,7 +348,7 @@ function Test-CIS710-AppGatewayWAF {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Application Gateway WAF: $($_.Exception.Message)"
+            -Details "Error checking Application Gateway WAF: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -454,7 +445,7 @@ function Test-CIS711-SubnetNSG {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking subnet NSG associations: $($_.Exception.Message)"
+            -Details "Error checking subnet NSG associations: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -503,7 +494,9 @@ function Test-CIS712-AppGatewayTLS {
                     $tls12Policies = @(
                         'AppGwSslPolicy20170401S',
                         'AppGwSslPolicy20220101',
-                        'AppGwSslPolicy20220101S'
+                        'AppGwSslPolicy20220101S',
+                        'AppGwSslPolicy20230202',
+                        'AppGwSslPolicy20230202S'
                     )
                     if ($policyName -in $tls12Policies) {
                         $minVersion = 'TLSv1_2'
@@ -548,7 +541,7 @@ function Test-CIS712-AppGatewayTLS {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Application Gateway TLS policy: $($_.Exception.Message)"
+            -Details "Error checking Application Gateway TLS policy: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -620,7 +613,7 @@ function Test-CIS713-AppGatewayHTTP2 {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Application Gateway HTTP/2: $($_.Exception.Message)"
+            -Details "Error checking Application Gateway HTTP/2: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -711,7 +704,12 @@ function Test-CIS714-WAFRequestBodyInspection {
 
         foreach ($policyId in $wafPolicyIds) {
             try {
-                $policy = Get-AzResource -ResourceId $policyId -ExpandProperties -ErrorAction Stop
+                # Use cached WAF policy if available, otherwise fetch
+                $policy = if ($ResourceCache.WafPolicies -and $ResourceCache.WafPolicies.ContainsKey($policyId)) {
+                    $ResourceCache.WafPolicies[$policyId]
+                } else {
+                    Get-AzResource -ResourceId $policyId -ExpandProperties -ErrorAction Stop
+                }
                 $policyName = ($policyId -split '/')[-1]
 
                 $requestBodyCheck = $false
@@ -764,7 +762,7 @@ function Test-CIS714-WAFRequestBodyInspection {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking WAF request body inspection: $($_.Exception.Message)"
+            -Details "Error checking WAF request body inspection: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -818,7 +816,12 @@ function Test-CIS715-WAFBotProtection {
 
         foreach ($policyId in $wafPolicyIds) {
             try {
-                $policy = Get-AzResource -ResourceId $policyId -ExpandProperties -ErrorAction Stop
+                # Use cached WAF policy if available, otherwise fetch
+                $policy = if ($ResourceCache.WafPolicies -and $ResourceCache.WafPolicies.ContainsKey($policyId)) {
+                    $ResourceCache.WafPolicies[$policyId]
+                } else {
+                    Get-AzResource -ResourceId $policyId -ExpandProperties -ErrorAction Stop
+                }
                 $policyName = ($policyId -split '/')[-1]
 
                 $hasBotProtection = $false
@@ -886,6 +889,6 @@ function Test-CIS715-WAFBotProtection {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking WAF bot protection: $($_.Exception.Message)"
+            -Details "Error checking WAF bot protection: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }

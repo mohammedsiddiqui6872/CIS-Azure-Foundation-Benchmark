@@ -15,7 +15,13 @@ function Install-CISRequiredModule {
 
     if ($installed) { return $true }
 
-    Write-Host "  Required module '$ModuleName' not found. Installing..." -ForegroundColor Yellow
+    $response = Read-Host "  Module '$ModuleName' is required but not installed. Install it now? (Y/N)"
+    if ($response -notin @('Y', 'y', 'Yes', 'yes')) {
+        Write-Host "  Skipping installation of '$ModuleName'." -ForegroundColor Yellow
+        return $false
+    }
+
+    Write-Host "  Installing module '$ModuleName'..." -ForegroundColor Yellow
     try {
         $installParams = @{
             Name               = $ModuleName
@@ -55,7 +61,6 @@ function Initialize-CISEnvironment {
         SubscriptionId    = ''
         SubscriptionName  = ''
         TenantId          = ''
-        TenantDomain      = ''
         NeedsGraph        = $false
         GraphConnected    = $false
         ScanTimestamp     = [DateTime]::UtcNow.ToString('o')
@@ -145,11 +150,14 @@ function Initialize-CISEnvironment {
                 catch {
                     $envInfo.IsValid = $false
                     $envInfo.Errors += "Failed to set subscription '$SubscriptionId': $($_.Exception.Message)"
+                    return $envInfo
                 }
             }
-            $envInfo.SubscriptionId   = $azContext.Subscription.Id
-            $envInfo.SubscriptionName = $azContext.Subscription.Name
-            $envInfo.TenantId         = $azContext.Tenant.Id
+            if ($envInfo.IsValid) {
+                $envInfo.SubscriptionId   = $azContext.Subscription.Id
+                $envInfo.SubscriptionName = $azContext.Subscription.Name
+                $envInfo.TenantId         = $azContext.Tenant.Id
+            }
         }
 
         # --- Check and auto-connect to Microsoft Graph if needed ---

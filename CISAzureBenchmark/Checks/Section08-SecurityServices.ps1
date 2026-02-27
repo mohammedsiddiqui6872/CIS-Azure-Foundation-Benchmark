@@ -7,6 +7,18 @@
 # Each function receives -ControlDef (hashtable) and -ResourceCache (hashtable).
 # =============================================================================
 
+# Shared helper to cache Get-AzSecurityContact results per scan.
+# The cache is stored in a script-scope variable, so it is reset when the
+# module is re-imported (i.e., once per scan session).
+$script:CISCachedSecurityContact = $null
+
+function Get-CISSecurityContact {
+    if ($null -eq $script:CISCachedSecurityContact) {
+        $script:CISCachedSecurityContact = Get-AzSecurityContact -ErrorAction Stop
+    }
+    return $script:CISCachedSecurityContact
+}
+
 function Test-CIS8133-EndpointProtection {
     <#
     .SYNOPSIS
@@ -139,7 +151,7 @@ function Test-CIS8110-VMUpdateCheck {
 
         # Check for extensions that indicate update assessment
         if (-not $hasUpdateCheck -and $serversPlan.Extension) {
-            $updateExtensions = @('AgentlessVmScanning', 'MdeDesignatedSubscription')
+            $updateExtensions = @('MdeDesignatedSubscription')
             $matchingExt = $serversPlan.Extension | Where-Object {
                 $_.Name -in $updateExtensions -and $_.IsEnabled -ne 'False' -and $_.IsEnabled -ne $false
             }
@@ -208,7 +220,7 @@ function Test-CIS8112-SecurityContactRoles {
     )
 
     try {
-        $securityContact = Get-AzSecurityContact -ErrorAction Stop
+        $securityContact = Get-CISSecurityContact
 
         if (-not $securityContact) {
             return New-CISCheckResult `
@@ -279,7 +291,7 @@ function Test-CIS8113-SecurityContactEmail {
     )
 
     try {
-        $securityContact = Get-AzSecurityContact -ErrorAction Stop
+        $securityContact = Get-CISSecurityContact
 
         if (-not $securityContact) {
             return New-CISCheckResult `
@@ -340,7 +352,7 @@ function Test-CIS8114-AlertNotifications {
     )
 
     try {
-        $securityContact = Get-AzSecurityContact -ErrorAction Stop
+        $securityContact = Get-CISSecurityContact
 
         if (-not $securityContact) {
             return New-CISCheckResult `
@@ -405,7 +417,7 @@ function Test-CIS8115-AttackPathNotifications {
     )
 
     try {
-        $securityContact = Get-AzSecurityContact -ErrorAction Stop
+        $securityContact = Get-CISSecurityContact
 
         if (-not $securityContact) {
             return New-CISCheckResult `
@@ -424,7 +436,7 @@ function Test-CIS8115-AttackPathNotifications {
         # The NotificationsSources property may contain attack path configuration
         if ($securityContact.NotificationsSources) {
             foreach ($source in $securityContact.NotificationsSources) {
-                if ($source.SourceType -eq 'AttackPath' -or $source.sourceType -eq 'AttackPath') {
+                if ($source.SourceType -eq 'AttackPath') {
                     $hasAttackPathNotification = $true
                     $riskLevel = if ($source.MinimalRiskLevel) { $source.MinimalRiskLevel } else { $source.minimalRiskLevel }
                     break
@@ -611,7 +623,6 @@ function Test-CIS839-KeyRotation {
                 $keys = @(Get-AzKeyVaultKey -VaultName $kv.VaultName -ErrorAction Stop)
 
                 foreach ($key in $keys) {
-                    if (-not $key.Enabled) { continue }
                     $totalKeys++
 
                     try {
@@ -649,7 +660,7 @@ function Test-CIS839-KeyRotation {
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
                 -Status 'PASS' `
-                -Details "N/A - No enabled keys found in the subscription. Control not evaluated." `
+                -Details "N/A - No keys found in the subscription. Control not evaluated." `
                 -TotalResources 0 -PassedResources 0 -FailedResources 0
         }
 
@@ -725,10 +736,16 @@ function Test-CIS8311-CertificateValidity {
                 foreach ($cert in $certs) {
                     $totalCerts++
                     try {
-                        $certDetail = Get-AzKeyVaultCertificate -VaultName $kv.VaultName -Name $cert.Name -ErrorAction Stop
-                        $certPolicy = Get-AzKeyVaultCertificatePolicy -VaultName $kv.VaultName -Name $cert.Name -ErrorAction Stop
-
-                        $validityMonths = $certPolicy.ValidityInMonths
+                        # Try the policy first - it has ValidityInMonths and avoids
+                        # a second API call to get full certificate details.
+                        $validityMonths = $null
+                        try {
+                            $certPolicy = Get-AzKeyVaultCertificatePolicy -VaultName $kv.VaultName -Name $cert.Name -ErrorAction Stop
+                            $validityMonths = $certPolicy.ValidityInMonths
+                        }
+                        catch {
+                            Write-Verbose "Could not retrieve policy for $($kv.VaultName)/$($cert.Name): $($_.Exception.Message)"
+                        }
 
                         if ($validityMonths -and $validityMonths -le 12) {
                             $passedCount++
@@ -737,7 +754,9 @@ function Test-CIS8311-CertificateValidity {
                             $failedList.Add("$($kv.VaultName)/$($cert.Name) (validity: $validityMonths months)")
                         }
                         else {
-                            # Calculate from certificate dates
+                            # Fall back to certificate dates (the list call already
+                            # returns basic cert info; fetch full detail only when needed)
+                            $certDetail = Get-AzKeyVaultCertificate -VaultName $kv.VaultName -Name $cert.Name -ErrorAction Stop
                             $notBefore = $certDetail.NotBefore
                             $expires   = $certDetail.Expires
                             if ($notBefore -and $expires) {
@@ -761,7 +780,7 @@ function Test-CIS8311-CertificateValidity {
                 }
             }
             catch {
-                Write-Verbose "Cannot access certificates in $($kv.VaultName): $($_.Exception.Message)"
+                $failedList.Add("$($kv.VaultName) [Vault access error: $(Format-CISErrorMessage $_.Exception.Message)]")
             }
         }
 

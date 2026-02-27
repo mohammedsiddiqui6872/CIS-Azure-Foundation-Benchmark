@@ -5,14 +5,16 @@
     Author            = 'Mohammed Siddiqui'
     CompanyName       = 'powershellnerd.com'
     Copyright         = '(c) 2026 Mohammed Siddiqui. All rights reserved.'
-    Description       = 'CIS Microsoft Azure Foundations Benchmark v5.0.0 Compliance Checker. Evaluates Azure subscriptions against 155 CIS controls (93 Automated + 62 Manual) covering Identity, Networking, Security, Storage, Analytics, Compute, and Management services. Generates interactive HTML dashboard, JSON, and CSV reports. Supports multi-subscription scanning.'
-    PowerShellVersion = '5.1'
+    Description       = 'CIS Microsoft Azure Foundations Benchmark v5.0.0 Compliance Checker. Evaluates Azure subscriptions against 155 CIS controls (93 Automated + 62 Manual) covering Identity, Networking, Security, Storage, Analytics, Compute, and Management services. Generates interactive HTML dashboard, JSON, and CSV reports. Supports multi-subscription scanning with optional parallel execution (PS 7+).'
+    PowerShellVersion      = '5.1'
+    CompatiblePSEditions   = @('Desktop', 'Core')
 
     # Dependencies are checked and auto-installed at runtime by Initialize-CISEnvironment
     # RequiredModules removed to allow module import before dependencies are installed
 
     FunctionsToExport = @(
         'Connect-CISAzureBenchmark'
+        'Disconnect-CISAzureBenchmark'
         'Invoke-CISAzureBenchmark'
         'Get-CISControlList'
         'Export-CISReport'
@@ -52,6 +54,7 @@ v5.1.0 - Bug fixes, security hardening, performance, and new features
 - Quality: Magic numbers replaced with configurable values
 - Quality: AuthorizationFailed-specific exception handling across all sections
 - Quality: Pester test suite restored and enhanced
+- New: Parallel subscription scanning (-Parallel -ThrottleLimit) for PS 7+ with PS 5.1 fallback
 '@
         }
     }

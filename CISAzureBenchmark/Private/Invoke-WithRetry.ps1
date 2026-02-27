@@ -18,6 +18,9 @@ function Invoke-WithRetry {
         [int]$BaseDelayMs = $(if ($script:CISConfig.RetryBaseDelayMs) { $script:CISConfig.RetryBaseDelayMs } else { 1000 }),
 
         [Parameter()]
+        [int]$MaxDelayMs = 30000,
+
+        [Parameter()]
         [string]$OperationName = 'Azure API call'
     )
 
@@ -52,7 +55,9 @@ function Invoke-WithRetry {
                 throw
             }
 
-            $delayMs = $BaseDelayMs * [math]::Pow(2, ($attempt - 1))
+            $baseDelay = $BaseDelayMs * [math]::Pow(2, ($attempt - 1))
+            $jitter = Get-Random -Maximum ([int]($baseDelay * 0.3))
+            $delayMs = [math]::Min($baseDelay + $jitter, $MaxDelayMs)
             Write-Verbose "$OperationName failed (attempt $attempt/$MaxRetries): $errorMsg. Retrying in $($delayMs)ms..."
             Start-Sleep -Milliseconds $delayMs
             $attempt++

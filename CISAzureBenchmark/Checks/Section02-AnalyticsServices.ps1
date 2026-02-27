@@ -77,7 +77,7 @@ function Test-CIS211-DatabricksVNet {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Databricks VNet injection: $($_.Exception.Message)"
+            -Details "Error checking Databricks VNet injection: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -114,12 +114,18 @@ function Test-CIS212-DatabricksNSG {
         $failedList     = [System.Collections.Generic.List[string]]::new()
         $passedCount    = 0
 
+        # Build hashtable for O(1) VNet lookup by Id
+        $vnetLookup = @{}
+        foreach ($v in $vnets) {
+            if ($v.Id) { $vnetLookup[$v.Id] = $v }
+        }
+
         foreach ($ws in $workspaces) {
             $vnetId = $ws.CustomVirtualNetworkId
             if ([string]::IsNullOrWhiteSpace($vnetId)) { continue }
 
-            # Find the VNet object from cache
-            $vnet = $vnets | Where-Object { $_.Id -eq $vnetId } | Select-Object -First 1
+            # Find the VNet object from cache via hashtable lookup
+            $vnet = $vnetLookup[$vnetId]
             if (-not $vnet) { continue }
 
             # Check public and private subnets referenced by Databricks
@@ -176,7 +182,7 @@ function Test-CIS212-DatabricksNSG {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Databricks subnet NSGs: $($_.Exception.Message)"
+            -Details "Error checking Databricks subnet NSGs: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -255,7 +261,7 @@ function Test-CIS217-DatabricksDiagnostics {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Databricks diagnostic settings: $($_.Exception.Message)"
+            -Details "Error checking Databricks diagnostic settings: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -337,7 +343,7 @@ function Test-CIS219-DatabricksNoPublicIP {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Databricks No Public IP setting: $($_.Exception.Message)"
+            -Details "Error checking Databricks No Public IP setting: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -410,7 +416,7 @@ function Test-CIS2110-DatabricksPublicAccess {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Databricks public network access: $($_.Exception.Message)"
+            -Details "Error checking Databricks public network access: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -483,6 +489,6 @@ function Test-CIS2111-DatabricksPrivateEndpoints {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Databricks private endpoints: $($_.Exception.Message)"
+            -Details "Error checking Databricks private endpoints: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }

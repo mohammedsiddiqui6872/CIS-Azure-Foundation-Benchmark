@@ -58,9 +58,18 @@ function Test-CIS512-MFAAllUsers {
                 -TotalResources 0 -PassedResources 0 -FailedResources 0
         }
 
-        # Exclude guest users - CIS requirement targets organization members only
+        # Exclude guest users and disabled accounts - CIS requirement targets active organization members only
         $allUsers = @($allUsers | Where-Object {
-            $_.userType -ne 'Guest' -and $_.userType -ne 'guest'
+            $_.userType -ne 'Guest' -and
+            $_.isAdmin -ne $null -or $_.userPrincipalName -ne $null  # ensure valid user objects
+        })
+        # Filter out disabled accounts if the property is available
+        $allUsers = @($allUsers | Where-Object {
+            # userRegistrationDetails may include an isEnabled or accountEnabled property
+            $enabled = $_.isEnabled
+            if ($null -eq $enabled) { $enabled = $_.accountEnabled }
+            # If the property is not available, include the user (assume enabled)
+            $null -eq $enabled -or $enabled -eq $true
         })
 
         if ($allUsers.Count -eq 0) {
@@ -81,7 +90,8 @@ function Test-CIS512-MFAAllUsers {
             if ($user.isMfaRegistered -eq $true) {
                 $isMfaRegistered = $true
             }
-            elseif ($user.methodsRegistered -and ($user.methodsRegistered -match 'mfa|authenticator|fido2|phone')) {
+            elseif ($user.methodsRegistered -and ($user.methodsRegistered -match 'mfa|microsoftAuthenticator|fido2|softwareOneTimePasscode|passKeyDeviceBound|windowsHelloForBusiness')) {
+                # Strong MFA methods only — SMS/phone alone is not considered strong MFA per NIST SP 800-63B
                 $isMfaRegistered = $true
             }
 
@@ -89,8 +99,14 @@ function Test-CIS512-MFAAllUsers {
                 $passedCount++
             }
             else {
-                $displayName = if ($user.userDisplayName) { $user.userDisplayName } else { $user.userPrincipalName }
-                $failedList.Add($displayName)
+                # Redact PII: show only first initial and domain to avoid leaking full names/UPNs in reports
+                $upn = $user.userPrincipalName
+                if ($upn -and $upn -match '^(.)[^@]*(@.+)$') {
+                    $redacted = "$($Matches[1])***$($Matches[2])"
+                } else {
+                    $redacted = if ($user.userDisplayName) { "$($user.userDisplayName[0])***" } else { 'Unknown' }
+                }
+                $failedList.Add($redacted)
             }
         }
 
@@ -125,7 +141,7 @@ function Test-CIS512-MFAAllUsers {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking MFA status for all users: $($_.Exception.Message)"
+            -Details "Error checking MFA status for all users: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -199,11 +215,14 @@ function Test-CIS512-MFAAllUsers-Fallback {
                     $passedCount++
                 }
                 else {
-                    $failedList.Add($user.DisplayName)
+                    # Redact PII: show only first initial to avoid leaking full names in reports
+                    $redactedName = if ($user.UserPrincipalName -and $user.UserPrincipalName -match '^(.)[^@]*(@.+)$') { "$($Matches[1])***$($Matches[2])" } elseif ($user.DisplayName) { "$($user.DisplayName[0])***" } else { 'Unknown' }
+                    $failedList.Add($redactedName)
                 }
             }
             catch {
-                $failedList.Add("$($user.DisplayName) [Error retrieving methods]")
+                $redactedName = if ($user.DisplayName) { "$($user.DisplayName[0])***" } else { 'Unknown' }
+                $failedList.Add("$redactedName [Error retrieving methods]")
             }
 
             # Throttle to avoid rate limiting
@@ -268,7 +287,7 @@ function Test-CIS516-GuestInviteRestrictions {
         $authPolicy = Get-MgPolicyAuthorizationPolicy -ErrorAction Stop
         $allowInvitesFrom = $authPolicy.AllowInvitesFrom
 
-        $acceptableValues = @('adminsAndGuestInviters', 'none')
+        $acceptableValues = @('adminsAndGuestInviters', 'adminsOnly', 'none')
 
         if ($allowInvitesFrom -in $acceptableValues) {
             return New-CISCheckResult `
@@ -292,7 +311,7 @@ function Test-CIS516-GuestInviteRestrictions {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking guest invite restrictions: $($_.Exception.Message)"
+            -Details "Error checking guest invite restrictions: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -425,14 +444,38 @@ function Test-CIS527-SubscriptionOwners {
         $ownerAssignments = @(Get-AzRoleAssignment -RoleDefinitionName 'Owner' -ErrorAction Stop |
             Where-Object { $_.Scope -match '^/subscriptions/[^/]+$' })
 
-        # Separate user owners from service principal owners
-        $userOwners = @($ownerAssignments | Where-Object { $_.ObjectType -eq 'User' })
-        $spOwners   = @($ownerAssignments | Where-Object { $_.ObjectType -ne 'User' })
-        $userCount  = $userOwners.Count
-        $totalCount = $ownerAssignments.Count
+        # Separate by type: User, Group, ServicePrincipal
+        $userOwners  = @($ownerAssignments | Where-Object { $_.ObjectType -eq 'User' })
+        $groupOwners = @($ownerAssignments | Where-Object { $_.ObjectType -eq 'Group' })
+        $spOwners    = @($ownerAssignments | Where-Object { $_.ObjectType -notin @('User', 'Group') })
+        $totalCount  = $ownerAssignments.Count
+
+        # Resolve group membership to count actual human owners
+        $groupMemberCount = 0
+        $groupNote = ''
+        if ($groupOwners.Count -gt 0) {
+            foreach ($grp in $groupOwners) {
+                try {
+                    $members = @(Get-MgGroupMember -GroupId $grp.ObjectId -All -ErrorAction Stop)
+                    $userMembers = @($members | Where-Object { $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.user' })
+                    $groupMemberCount += $userMembers.Count
+                } catch {
+                    Write-Verbose "Could not resolve members of group '$($grp.DisplayName)': $($_.Exception.Message)"
+                }
+            }
+            if ($groupMemberCount -gt 0) {
+                $groupNote = " ($groupMemberCount additional user(s) via $($groupOwners.Count) group assignment(s))"
+            } else {
+                $groupNote = " ($($groupOwners.Count) group assignment(s) could not be resolved - actual owner count may differ)"
+            }
+        }
+
+        # Effective user count includes direct users + group members
+        $directUserCount    = $userOwners.Count
+        $effectiveUserCount = $directUserCount + $groupMemberCount
 
         $ownerDetails = ($ownerAssignments | ForEach-Object {
-            $type = if ($_.ObjectType -eq 'User') { 'User' } else { $_.ObjectType }
+            $type = if ($_.ObjectType -eq 'User') { 'User' } elseif ($_.ObjectType -eq 'Group') { 'Group' } else { $_.ObjectType }
             "$($_.DisplayName) [$type]"
         }) -join ', '
 
@@ -441,22 +484,22 @@ function Test-CIS527-SubscriptionOwners {
             $spNote = " Note: $($spOwners.Count) owner(s) are service principals (not human users)."
         }
 
-        if ($userCount -ge 2 -and $userCount -le 3) {
+        if ($effectiveUserCount -ge 2 -and $effectiveUserCount -le 3) {
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
                 -Status 'PASS' `
-                -Details "Subscription has $userCount user owner(s), within the recommended range (2-3). All owners: $ownerDetails$spNote" `
+                -Details "Subscription has $effectiveUserCount effective user owner(s) ($directUserCount direct$groupNote), within the recommended range (2-3). All owners: $ownerDetails$spNote" `
                 -TotalResources $totalCount `
                 -PassedResources $totalCount `
                 -FailedResources 0
         }
 
-        if ($userCount -lt 2) {
-            $details = "Subscription has only $userCount user owner(s). Minimum 2 recommended for availability. All owners: $ownerDetails$spNote"
+        if ($effectiveUserCount -lt 2) {
+            $details = "Subscription has only $effectiveUserCount effective user owner(s) ($directUserCount direct$groupNote). Minimum 2 recommended for availability. All owners: $ownerDetails$spNote"
         }
         else {
-            $details = "Subscription has $userCount user owner(s), exceeding the recommended maximum of 3. All owners: $ownerDetails$spNote"
+            $details = "Subscription has $effectiveUserCount effective user owner(s) ($directUserCount direct$groupNote), exceeding the recommended maximum of 3. All owners: $ownerDetails$spNote"
         }
 
         return New-CISCheckResult `
@@ -540,6 +583,6 @@ function Test-CIS533-UserAccessAdmin {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking User Access Administrator role: $($_.Exception.Message)"
+            -Details "Error checking User Access Administrator role: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }

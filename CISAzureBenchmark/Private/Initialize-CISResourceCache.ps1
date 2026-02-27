@@ -18,11 +18,11 @@ function Initialize-CISResourceCache {
         NetworkWatchers      = @()
         VirtualNetworks      = @()
         DatabricksWorkspaces = @()
-        Subscriptions        = @()
-        DiagnosticSettings   = @{}
-        WebApps              = @()
+        WafPolicies          = @{}
         BlobServiceProperties = @{}
         FileServiceProperties = @{}
+        FetchWarnings        = [System.Collections.Generic.List[string]]::new()
+        FailedResourceTypes  = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     }
 
     $patterns = $ControlsToRun | ForEach-Object { $_.CheckPattern } | Select-Object -Unique
@@ -41,7 +41,10 @@ function Initialize-CISResourceCache {
             return $result
         }
         catch {
-            Write-Warning "Failed to fetch ${ResourceType}: $($_.Exception.Message)"
+            $warnMsg = "Failed to fetch ${ResourceType}: $(Format-CISErrorMessage -Message $_.Exception.Message). Checks depending on this resource type may report inaccurate results."
+            Write-Warning $warnMsg
+            $cache.FetchWarnings.Add($warnMsg)
+            [void]$cache.FailedResourceTypes.Add($ResourceType)
             return @()
         }
     }
@@ -59,10 +62,14 @@ function Initialize-CISResourceCache {
                 try {
                     $ctx = $sa | New-AzStorageContext -ErrorAction Stop
                     try {
-                        $cache.BlobServiceProperties[$sa.StorageAccountName] = Get-AzStorageBlobServiceProperty -StorageContext $ctx -ErrorAction Stop
+                        $cache.BlobServiceProperties[$sa.StorageAccountName] = Invoke-WithRetry -OperationName "Blob properties for $($sa.StorageAccountName)" -ScriptBlock {
+                            Get-AzStorageBlobServiceProperty -StorageContext $ctx -ErrorAction Stop
+                        }
                     } catch { Write-Verbose "Could not get blob properties for $($sa.StorageAccountName): $($_.Exception.Message)" }
                     try {
-                        $cache.FileServiceProperties[$sa.StorageAccountName] = Get-AzStorageFileServiceProperty -StorageContext $ctx -ErrorAction Stop
+                        $cache.FileServiceProperties[$sa.StorageAccountName] = Invoke-WithRetry -OperationName "File properties for $($sa.StorageAccountName)" -ScriptBlock {
+                            Get-AzStorageFileServiceProperty -StorageContext $ctx -ErrorAction Stop
+                        }
                     } catch { Write-Verbose "Could not get file properties for $($sa.StorageAccountName): $($_.Exception.Message)" }
                 } catch { Write-Verbose "Could not create storage context for $($sa.StorageAccountName): $($_.Exception.Message)" }
             }
@@ -81,6 +88,19 @@ function Initialize-CISResourceCache {
         ($ControlsToRun | Where-Object { $_.Subsection -eq 'Key Vault' -or $_.CheckFunction -match 'KeyVault' })) {
         $cache.KeyVaults = Invoke-CacheFetch -ResourceType 'Key Vaults' -FetchScript {
             Get-AzKeyVault -ErrorAction Stop
+        }
+
+        # After fetching Key Vaults list, pre-fetch full details to eliminate N+1 API calls
+        if ($cache.KeyVaults.Count -gt 0) {
+            Write-Verbose "Pre-fetching Key Vault details for $($cache.KeyVaults.Count) vaults..."
+            foreach ($kv in $cache.KeyVaults) {
+                try {
+                    $fullVault = Get-AzKeyVault -VaultName $kv.VaultName -ResourceGroupName $kv.ResourceGroupName -ErrorAction Stop
+                    $cache.KeyVaultDetails[$kv.VaultName] = $fullVault
+                } catch {
+                    Write-Verbose "Could not get details for vault $($kv.VaultName): $($_.Exception.Message)"
+                }
+            }
         }
     }
 
@@ -103,6 +123,24 @@ function Initialize-CISResourceCache {
 
         $cache.NetworkWatchers = Invoke-CacheFetch -ResourceType 'Network Watchers' -FetchScript {
             Get-AzNetworkWatcher -ErrorAction Stop
+        }
+
+        # Pre-fetch WAF policies from Application Gateways to avoid duplicate API calls
+        if ($cache.ApplicationGateways.Count -gt 0) {
+            $wafPolicyIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            foreach ($gw in $cache.ApplicationGateways) {
+                if ($gw.FirewallPolicy -and $gw.FirewallPolicy.Id) {
+                    [void]$wafPolicyIds.Add($gw.FirewallPolicy.Id)
+                }
+            }
+            foreach ($policyId in $wafPolicyIds) {
+                try {
+                    $policy = Get-AzResource -ResourceId $policyId -ExpandProperties -ErrorAction Stop
+                    $cache.WafPolicies[$policyId] = $policy
+                } catch {
+                    Write-Verbose "Could not get WAF policy $policyId`: $($_.Exception.Message)"
+                }
+            }
         }
     }
 

@@ -55,7 +55,7 @@
   --bg-header: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #1e40af 100%);
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --text-tertiary: #94a3b8;
+  --text-tertiary: #64748b;
   --text-header: #ffffff;
   --border-color: #e2e8f0;
   --border-color-light: #f1f5f9;
@@ -84,7 +84,7 @@
   --bg-header: linear-gradient(135deg, #0c1222 0%, #162033 50%, #1e3a5f 100%);
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
+  --text-tertiary: #8b9bb5;
   --text-header: #f1f5f9;
   --border-color: #334155;
   --border-color-light: #1e293b;
@@ -354,24 +354,6 @@ a:hover { text-decoration: underline; }
   border-color: transparent;
   width: 0;
   height: 0;
-}
-
-.print-btn {
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: var(--radius-sm);
-  color: rgba(255,255,255,0.8);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 6px 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: var(--font-sans);
-}
-
-.print-btn:hover {
-  background: rgba(255,255,255,0.18);
-  color: #ffffff;
 }
 
 /* ============================================================
@@ -771,17 +753,11 @@ a:hover { text-decoration: underline; }
   font-weight: 500;
 }
 
-.legend-dot {
+.section-legend .legend-dot {
   width: 8px;
   height: 8px;
-  border-radius: 2px;
+  border-radius: 50%;
 }
-
-.legend-dot.pass { background: var(--color-pass); }
-.legend-dot.fail { background: var(--color-fail); }
-.legend-dot.warning { background: var(--color-warning); }
-.legend-dot.info { background: var(--color-info); }
-.legend-dot.error { background: var(--color-error); }
 
 /* ============================================================
    CONTROLS TABLE
@@ -1381,7 +1357,7 @@ a:hover { text-decoration: underline; }
     --bg-tertiary: #f8fafc;
     --text-primary: #0f172a;
     --text-secondary: #475569;
-    --text-tertiary: #94a3b8;
+    --text-tertiary: #64748b;
     --border-color: #e2e8f0;
     --border-color-light: #f1f5f9;
     --donut-track: #e2e8f0;
@@ -1408,7 +1384,6 @@ a:hover { text-decoration: underline; }
   }
 
   .theme-toggle,
-  .print-btn,
   .table-toolbar,
   .no-print {
     display: none !important;
@@ -1497,7 +1472,7 @@ a:hover { text-decoration: underline; }
   <!-- Subscription Switcher (hidden if single subscription) -->
   <div class="subscription-switcher" id="subscriptionSwitcher" style="display:none">
     <label for="subscriptionSelect">&#9729; Subscription</label>
-    <select id="subscriptionSelect"></select>
+    <select id="subscriptionSelect" aria-label="Select subscription"></select>
     <span class="subscription-count" id="subscriptionCount"></span>
   </div>
 
@@ -1507,7 +1482,7 @@ a:hover { text-decoration: underline; }
       <!-- Donut Chart -->
       <div class="score-card animate-in">
         <div class="donut-container">
-          <svg class="donut-svg" viewBox="0 0 200 200">
+          <svg class="donut-svg" viewBox="0 0 200 200" role="img" aria-label="Compliance score donut chart">
             <circle class="donut-track" cx="100" cy="100" r="82" />
             <circle class="donut-glow" id="donutGlow" cx="100" cy="100" r="82"
               stroke-dasharray="515.22"
@@ -1588,9 +1563,9 @@ a:hover { text-decoration: underline; }
   <div class="table-container">
     <div class="table-toolbar no-print">
       <div class="search-box">
-        <input type="text" id="searchInput" placeholder="Search controls by ID, title, section..." />
+        <input type="text" id="searchInput" placeholder="Search controls by ID, title, section..." aria-label="Search controls" />
       </div>
-      <select class="filter-select" id="filterStatus">
+      <select class="filter-select" id="filterStatus" aria-label="Filter by status">
         <option value="">All Statuses</option>
         <option value="PASS">Pass</option>
         <option value="FAIL">Fail</option>
@@ -1598,10 +1573,10 @@ a:hover { text-decoration: underline; }
         <option value="INFO">Info / Manual</option>
         <option value="ERROR">Error</option>
       </select>
-      <select class="filter-select" id="filterSection">
+      <select class="filter-select" id="filterSection" aria-label="Filter by section">
         <option value="">All Sections</option>
       </select>
-      <select class="filter-select" id="filterSeverity">
+      <select class="filter-select" id="filterSeverity" aria-label="Filter by severity">
         <option value="">All Severities</option>
         <option value="Critical">Critical</option>
         <option value="High">High</option>
@@ -1609,7 +1584,7 @@ a:hover { text-decoration: underline; }
         <option value="Low">Low</option>
         <option value="Informational">Informational</option>
       </select>
-      <select class="filter-select" id="filterProfile">
+      <select class="filter-select" id="filterProfile" aria-label="Filter by profile level">
         <option value="">All Levels</option>
         <option value="1">Level 1</option>
         <option value="2">Level 2</option>
@@ -1763,7 +1738,7 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
       else if (st === 'INFO' || st === 'MANUAL') s.info++;
       else if (st === 'ERROR') s.error++;
     });
-    var denom = s.total - s.info - s.warning;
+    var denom = s.total - s.info - s.warning - s.error;
     s.score = denom > 0 ? Math.round((s.pass / denom) * 1000) / 10 : -1;
     return s;
   }
@@ -2058,11 +2033,11 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
     var html = '<ul class="reference-links">';
     arr.forEach(function(r) {
       if (typeof r === 'object' && r.url) {
-        html += '<li><a href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener">' + escapeHtml(r.title || r.url) + '</a></li>';
+        html += '<li><a href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(r.title || r.url) + '</a></li>';
       } else {
         var url = String(r);
         if (url.match(/^https?:\/\//i)) {
-          html += '<li><a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + escapeHtml(url) + '</a></li>';
+          html += '<li><a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(url) + '</a></li>';
         } else {
           html += '<li>' + escapeHtml(url) + '</li>';
         }
@@ -2131,6 +2106,9 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
 
       var tr = document.createElement('tr');
       tr.setAttribute('data-control', controlId);
+      tr.setAttribute('tabindex', '0');
+      tr.setAttribute('role', 'button');
+      tr.setAttribute('aria-expanded', 'false');
       tr.innerHTML =
         '<td class="status-icon-cell"><span class="status-icon ' + statusCls + '">' + getStatusIcon(status) + '</span></td>' +
         '<td><span class="expand-arrow">&#9654;</span><span class="control-id">' + escapeHtml(controlId) + '</span></td>' +
@@ -2163,14 +2141,27 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
         expanded: false
       };
 
-      tr.addEventListener('click', function() {
+      function toggleRow(rowData) {
         rowData.expanded = !rowData.expanded;
         if (rowData.expanded) {
           rowData.mainTr.classList.add('expanded');
           rowData.detailTr.classList.add('visible');
+          rowData.mainTr.setAttribute('aria-expanded', 'true');
         } else {
           rowData.mainTr.classList.remove('expanded');
           rowData.detailTr.classList.remove('visible');
+          rowData.mainTr.setAttribute('aria-expanded', 'false');
+        }
+      }
+
+      tr.addEventListener('click', function() {
+        toggleRow(rowData);
+      });
+
+      tr.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleRow(rowData);
         }
       });
 
@@ -2212,6 +2203,7 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
         rowData.expanded = true;
         rowData.mainTr.classList.add('expanded');
         rowData.detailTr.classList.add('visible');
+        rowData.mainTr.setAttribute('aria-expanded', 'true');
       }
     });
   });
@@ -2221,6 +2213,7 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
       rowData.expanded = false;
       rowData.mainTr.classList.remove('expanded');
       rowData.detailTr.classList.remove('visible');
+      rowData.mainTr.setAttribute('aria-expanded', 'false');
     });
   });
 
@@ -2291,6 +2284,20 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
   var sortState = { column: null, direction: 'asc' };
   var headers = document.querySelectorAll('.controls-table thead th[data-sort]');
 
+  function compareControlIds(a, b) {
+    // Strip any non-numeric prefix (e.g., "cis-" from "cis-2.1.10")
+    var sa = a.replace(/^[^0-9]*/, '');
+    var sb = b.replace(/^[^0-9]*/, '');
+    var pa = sa.split('.').map(function(s) { return parseInt(s, 10) || 0; });
+    var pb = sb.split('.').map(function(s) { return parseInt(s, 10) || 0; });
+    for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+      var na = pa[i] || 0;
+      var nb = pb[i] || 0;
+      if (na !== nb) return na - nb;
+    }
+    return 0;
+  }
+
   function sortRows(column, direction) {
     var getValue = function(rowData) {
       switch(column) {
@@ -2310,7 +2317,8 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
       var aVal = getValue(a);
       var bVal = getValue(b);
       var cmp = 0;
-      if (typeof aVal === 'number' && typeof bVal === 'number') cmp = aVal - bVal;
+      if (column === 'controlId') cmp = compareControlIds(aVal, bVal);
+      else if (typeof aVal === 'number' && typeof bVal === 'number') cmp = aVal - bVal;
       else cmp = String(aVal).localeCompare(String(bVal));
       return direction === 'desc' ? -cmp : cmp;
     });

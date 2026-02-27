@@ -9,19 +9,21 @@ function Format-CISErrorMessage {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string]$Message,
 
         [Parameter()]
+        [ValidateRange(1, [int]::MaxValue)]
         [int]$MaxLength = 500
     )
 
     $sanitized = $Message
 
     # Strip Azure correlation/request IDs (GUIDs in error context)
-    $sanitized = $sanitized -replace 'Correlation(?:Id|RequestId)[:\s]+[a-f0-9-]{36}', ''
-    $sanitized = $sanitized -replace 'x-ms-request-id[:\s]+[a-f0-9-]{36}', ''
-    $sanitized = $sanitized -replace 'RequestId[:\s]+[a-f0-9-]{36}', ''
-    $sanitized = $sanitized -replace 'tracking-id[:\s]+[a-f0-9-]{36}', ''
+    $sanitized = $sanitized -replace 'Correlation(?:Id|RequestId)[:\s]+[a-fA-F0-9-]{36}', ''
+    $sanitized = $sanitized -replace 'x-ms-request-id[:\s]+[a-fA-F0-9-]{36}', ''
+    $sanitized = $sanitized -replace 'RequestId[:\s]+[a-fA-F0-9-]{36}', ''
+    $sanitized = $sanitized -replace 'tracking-id[:\s]+[a-fA-F0-9-]{36}', ''
 
     # Strip stack traces
     $sanitized = $sanitized -replace '(?s)\s+at\s+\S+\.\S+\(.*?\)', ''

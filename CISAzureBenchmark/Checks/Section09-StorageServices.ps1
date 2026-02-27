@@ -50,12 +50,6 @@ function Test-CIS9311-KeyRotationReminders {
                 }
             }
 
-            # Alternative: check via KeyCreationTime property existence
-            if (-not $hasKeyPolicy -and $sa.KeyCreationTime) {
-                # If KeyCreationTime is tracked, the account has key policy awareness
-                # However, the rotation reminder requires explicit KeyPolicy
-            }
-
             if ($hasKeyPolicy) {
                 $passedCount++
             }
@@ -132,8 +126,6 @@ function Test-CIS9312-KeyRegeneration {
         $passedCount = 0
 
         foreach ($sa in $storageAccounts) {
-            $keysOld = $false
-
             if ($sa.KeyCreationTime) {
                 # Check both key1 and key2 creation times
                 $key1Time = $sa.KeyCreationTime.Key1
@@ -151,7 +143,6 @@ function Test-CIS9312-KeyRegeneration {
                     $failedList.Add("$($sa.StorageAccountName) (key creation times unavailable)")
                 }
                 elseif ($key1Old -or $key2Old) {
-                    $keysOld = $true
                     $ages = @()
                     if ($null -ne $key1AgeDays) { $ages += $key1AgeDays }
                     if ($null -ne $key2AgeDays) { $ages += $key2AgeDays }

@@ -22,15 +22,21 @@ function New-CISHtmlReport {
 
     $template = Get-Content -Path $templatePath -Raw -Encoding UTF8
 
-    # Calculate statistics for primary/combined results
-    $total   = $Results.Count
-    $pass    = ($Results | Where-Object Status -eq 'PASS').Count
-    $fail    = ($Results | Where-Object Status -eq 'FAIL').Count
-    $warning = ($Results | Where-Object Status -eq 'WARNING').Count
-    $info    = ($Results | Where-Object Status -eq 'INFO').Count
-    $error_  = ($Results | Where-Object Status -eq 'ERROR').Count
+    # Calculate statistics for primary/combined results — single-pass counting
+    $total = $Results.Count
+    $pass = 0; $fail = 0; $warning = 0; $info = 0; $error_ = 0
+    foreach ($r in $Results) {
+        switch ($r.Status) {
+            'PASS'    { $pass++ }
+            'FAIL'    { $fail++ }
+            'WARNING' { $warning++ }
+            'INFO'    { $info++ }
+            'ERROR'   { $error_++ }
+        }
+    }
 
-    $scoreDenom = $total - $info - $warning
+    # Score excludes INFO, WARNING, and ERROR from denominator
+    $scoreDenom = $total - $info - $warning - $error_
     $overallScore = if ($scoreDenom -gt 0) {
         [math]::Round(($pass / $scoreDenom) * 100, 1)
     } else { -1 }
@@ -88,17 +94,37 @@ function New-CISHtmlReport {
     $jsonPayload = $jsonPayload -replace '</', '<\/'
     $multiSubJson = $multiSubJson -replace '</', '<\/'
 
-    # Replace tokens
+    # Helper for HTML encoding that works on both PS 5.1 and PS 7+
+    function Encode-HtmlSafe {
+        param([string]$Value)
+        if (-not $Value) { return '' }
+        try {
+            return [System.Web.HttpUtility]::HtmlEncode($Value)
+        }
+        catch {
+            # Fallback for PS 5.1 if System.Web is not loaded
+            try {
+                return [System.Net.WebUtility]::HtmlEncode($Value)
+            }
+            catch {
+                # Manual fallback
+                return $Value -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;' -replace "'",'&#39;'
+            }
+        }
+    }
+
+    # Replace tokens — HTML-encode ALL user-facing values to prevent XSS
     $html = $template
-    $html = $html -replace '\{\{BENCHMARK_VERSION\}\}', 'v5.0.0'
+    $bmkVersion = if ($script:CISBenchmarkVersion) { $script:CISBenchmarkVersion } else { 'v5.0.0' }
+    $html = $html -replace '\{\{BENCHMARK_VERSION\}\}', $bmkVersion
     $scanTs = if ($Metadata.ScanTimestamp) { $Metadata.ScanTimestamp } else { [DateTime]::UtcNow.ToString('o') }
     $subName = if ($Metadata.SubscriptionName) { $Metadata.SubscriptionName } else { 'N/A' }
     $subId = if ($Metadata.SubscriptionId) { $Metadata.SubscriptionId } else { 'N/A' }
     $tenId = if ($Metadata.TenantId) { $Metadata.TenantId } else { 'N/A' }
-    $html = $html -replace '\{\{SCAN_TIMESTAMP\}\}', $scanTs
-    $html = $html -replace '\{\{SUBSCRIPTION_NAME\}\}', [System.Web.HttpUtility]::HtmlEncode($subName)
-    $html = $html -replace '\{\{SUBSCRIPTION_ID\}\}', $subId
-    $html = $html -replace '\{\{TENANT_ID\}\}', $tenId
+    $html = $html -replace '\{\{SCAN_TIMESTAMP\}\}', (Encode-HtmlSafe $scanTs)
+    $html = $html -replace '\{\{SUBSCRIPTION_NAME\}\}', (Encode-HtmlSafe $subName)
+    $html = $html -replace '\{\{SUBSCRIPTION_ID\}\}', (Encode-HtmlSafe $subId)
+    $html = $html -replace '\{\{TENANT_ID\}\}', (Encode-HtmlSafe $tenId)
     $html = $html -replace '\{\{OVERALL_SCORE\}\}', $overallScore.ToString()
     $html = $html -replace '\{\{TOTAL_CONTROLS\}\}', $total.ToString()
     $html = $html -replace '\{\{PASS_COUNT\}\}', $pass.ToString()

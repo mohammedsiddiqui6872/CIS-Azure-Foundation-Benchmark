@@ -1,6 +1,6 @@
 @{
     BenchmarkVersion = 'v5.0.0'
-    BenchmarkDate    = '09-30-2025'
+    BenchmarkDate    = '2025-09-30'
     TotalControls    = 155
 
     Controls = @(
@@ -191,6 +191,8 @@
             References       = @('https://learn.microsoft.com/en-us/entra/identity/authentication/concept-mfa-howitworks')
             CISControls      = @('v8:6.4', 'v7:4.5')
         }
+
+        # Note: Section 4 (Database Services) is not included in CIS Azure Foundations Benchmark v5.0.0
 
         # =====================================================================
         # SECTION 5: IDENTITY SERVICES (43 controls)

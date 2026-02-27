@@ -111,6 +111,11 @@ function New-CISSarifReport {
         $sarifResults.Add($sarifResult)
     }
 
+    # Use centralized version from module scope
+    $toolVersion = if ($script:CISModuleVersion) { $script:CISModuleVersion } else { '5.1.0' }
+    $bmkVersion = if ($script:CISBenchmarkVersion) { $script:CISBenchmarkVersion } else { 'v5.0.0' }
+    $benchmarkLabel = "CIS Microsoft Azure Foundations Benchmark $bmkVersion"
+
     # Build SARIF document
     $sarif = [ordered]@{
         '$schema' = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json'
@@ -120,9 +125,9 @@ function New-CISSarifReport {
                 tool = [ordered]@{
                     driver = [ordered]@{
                         name            = 'CIS Azure Benchmark'
-                        version         = '5.0.0'
-                        semanticVersion = '5.0.0'
-                        informationUri  = 'https://github.com/mohammedsiddiqui6872/CIS-Azure-Foundation-Benchmark'
+                        version         = $toolVersion
+                        semanticVersion = $toolVersion
+                        informationUri  = 'https://www.cisecurity.org/benchmark/azure'
                         rules           = $rules.ToArray()
                     }
                 }
@@ -137,7 +142,7 @@ function New-CISSarifReport {
                     subscriptionName = if ($Metadata.SubscriptionName) { $Metadata.SubscriptionName } else { 'N/A' }
                     subscriptionId   = if ($Metadata.SubscriptionId) { $Metadata.SubscriptionId } else { 'N/A' }
                     tenantId         = if ($Metadata.TenantId) { $Metadata.TenantId } else { 'N/A' }
-                    benchmarkVersion = 'CIS Microsoft Azure Foundations Benchmark v5.0.0'
+                    benchmarkVersion = $benchmarkLabel
                 }
             }
         )

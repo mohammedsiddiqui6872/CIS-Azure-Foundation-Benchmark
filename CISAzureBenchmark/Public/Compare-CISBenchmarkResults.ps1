@@ -20,11 +20,21 @@ function Compare-CISBenchmarkResults {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [ValidateScript({ Test-Path $_ -PathType Leaf })]
+        [ValidateScript({
+            if (-not (Test-Path $_ -PathType Leaf)) {
+                throw "Baseline file not found: '$_'. Please provide a valid path to an existing JSON report file."
+            }
+            $true
+        })]
         [string]$BaselinePath,
 
         [Parameter(Mandatory)]
-        [ValidateScript({ Test-Path $_ -PathType Leaf })]
+        [ValidateScript({
+            if (-not (Test-Path $_ -PathType Leaf)) {
+                throw "Current file not found: '$_'. Please provide a valid path to an existing JSON report file."
+            }
+            $true
+        })]
         [string]$CurrentPath,
 
         [Parameter()]
@@ -32,8 +42,20 @@ function Compare-CISBenchmarkResults {
     )
 
     # Load reports
-    $baseline = Get-Content -Path $BaselinePath -Raw | ConvertFrom-Json
-    $current  = Get-Content -Path $CurrentPath  -Raw | ConvertFrom-Json
+    try {
+        $baseline = Get-Content -Path $BaselinePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        Write-Error "Failed to parse baseline JSON file '$BaselinePath': $($_.Exception.Message)"
+        return
+    }
+    try {
+        $current = Get-Content -Path $CurrentPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        Write-Error "Failed to parse current JSON file '$CurrentPath': $($_.Exception.Message)"
+        return
+    }
 
     $baseResults = @{}
     foreach ($r in $baseline.results) {
@@ -145,7 +167,7 @@ function Compare-CISBenchmarkResults {
     }
 
     # Console summary
-    $trend = if ($scoreDelta -gt 0) { "improved +$scoreDelta%" } elseif ($scoreDelta -lt 0) { "declined $scoreDelta%" } elseif ($null -eq $scoreDelta) { 'N/A' } else { 'unchanged' }
+    $trend = if ($scoreDelta -gt 0) { "improved +$scoreDelta%" } elseif ($scoreDelta -lt 0) { "declined $([math]::Abs($scoreDelta))%" } elseif ($null -eq $scoreDelta) { 'N/A' } else { 'unchanged' }
     Write-Host ""
     Write-Host "  CIS Benchmark Trend Analysis" -ForegroundColor Cyan
     Write-Host "  Baseline: $($baseline.scanTimestamp) | Current: $($current.scanTimestamp)" -ForegroundColor DarkGray

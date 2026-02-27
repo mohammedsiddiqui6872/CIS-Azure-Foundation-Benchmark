@@ -11,20 +11,31 @@ function New-CISJsonReport {
         [hashtable]$Metadata = @{}
     )
 
+    # Single-pass counting instead of multiple Where-Object calls
     $total   = $Results.Count
-    $pass    = ($Results | Where-Object Status -eq 'PASS').Count
-    $fail    = ($Results | Where-Object Status -eq 'FAIL').Count
-    $warning = ($Results | Where-Object Status -eq 'WARNING').Count
-    $info    = ($Results | Where-Object Status -eq 'INFO').Count
-    $error_  = ($Results | Where-Object Status -eq 'ERROR').Count
+    $pass    = 0
+    $fail    = 0
+    $warning = 0
+    $info    = 0
+    $error_  = 0
+    foreach ($r in $Results) {
+        switch ($r.Status) {
+            'PASS'    { $pass++ }
+            'FAIL'    { $fail++ }
+            'WARNING' { $warning++ }
+            'INFO'    { $info++ }
+            'ERROR'   { $error_++ }
+        }
+    }
 
-    $scoreDenom = $total - $info - $warning
+    # Exclude INFO, WARNING, and ERROR from the scoring denominator
+    $scoreDenom = $total - $info - $warning - $error_
     $overallScore = if ($scoreDenom -gt 0) {
         [math]::Round(($pass / $scoreDenom) * 100, 1)
     } else { -1 }
 
     $report = [ordered]@{
-        benchmarkVersion = 'CIS Microsoft Azure Foundations Benchmark v5.0.0'
+        benchmarkVersion = "CIS Microsoft Azure Foundations Benchmark $(if ($script:CISBenchmarkVersion) { $script:CISBenchmarkVersion } else { 'v5.0.0' })"
         scanTimestamp    = if ($Metadata.ScanTimestamp) { $Metadata.ScanTimestamp } else { [DateTime]::UtcNow.ToString('o') }
         subscriptionName = if ($Metadata.SubscriptionName) { $Metadata.SubscriptionName } else { 'N/A' }
         subscriptionId   = if ($Metadata.SubscriptionId) { $Metadata.SubscriptionId } else { 'N/A' }
@@ -39,19 +50,26 @@ function New-CISJsonReport {
             error          = $error_
         }
         sectionBreakdown = ($Results | Group-Object Section | ForEach-Object {
-            $sPass = ($_.Group | Where-Object Status -eq 'PASS').Count
             $sTotal = $_.Group.Count
-            $sInfo = ($_.Group | Where-Object Status -eq 'INFO').Count
-            $sWarn = ($_.Group | Where-Object Status -eq 'WARNING').Count
-            $sDenom = $sTotal - $sInfo - $sWarn
+            $sPass = 0; $sFail = 0; $sWarn = 0; $sInfo = 0; $sError = 0
+            foreach ($item in $_.Group) {
+                switch ($item.Status) {
+                    'PASS'    { $sPass++ }
+                    'FAIL'    { $sFail++ }
+                    'WARNING' { $sWarn++ }
+                    'INFO'    { $sInfo++ }
+                    'ERROR'   { $sError++ }
+                }
+            }
+            $sDenom = $sTotal - $sInfo - $sWarn - $sError
             [ordered]@{
                 section    = $_.Name
                 total      = $sTotal
                 passed     = $sPass
-                failed     = ($_.Group | Where-Object Status -eq 'FAIL').Count
-                warning    = ($_.Group | Where-Object Status -eq 'WARNING').Count
+                failed     = $sFail
+                warning    = $sWarn
                 info       = $sInfo
-                error      = ($_.Group | Where-Object Status -eq 'ERROR').Count
+                error      = $sError
                 score      = if ($sDenom -gt 0) { [math]::Round(($sPass / $sDenom) * 100, 1) } else { -1 }
             }
         })

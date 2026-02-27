@@ -30,6 +30,10 @@ function Write-CISProgress {
     if ($script:CISProgressLastCheck) {
         $elapsed = ($now - $script:CISProgressLastCheck).TotalSeconds
         $script:CISProgressTimes.Add($elapsed)
+        # Sliding window: keep only the last 20 samples for ETA accuracy
+        while ($script:CISProgressTimes.Count -gt 20) {
+            $script:CISProgressTimes.RemoveAt(0)
+        }
     }
     $script:CISProgressLastCheck = $now
 
@@ -45,7 +49,7 @@ function Write-CISProgress {
     }
 
     $progressParams = @{
-        Activity = "CIS Azure Benchmark v5.0.0 - $Activity"
+        Activity = "CIS Azure Benchmark - $Activity"
         Status   = "${Status}${eta}"
     }
 

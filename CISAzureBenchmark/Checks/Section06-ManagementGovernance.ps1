@@ -51,7 +51,7 @@ function Test-CIS6111-SubscriptionDiagnostics {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking subscription diagnostic settings: $($_.Exception.Message)"
+            -Details "Error checking subscription diagnostic settings: $(Format-CISErrorMessage -Message $_.Exception.Message)"
     }
 }
 
@@ -93,13 +93,15 @@ function Test-CIS6112-DiagnosticCategories {
 
         foreach ($setting in $diagSettings) {
             $enabledCategories = @()
-            if ($setting.Log) {
-                $enabledCategories = @($setting.Log |
+            # Support both $setting.Logs (newer Az.Monitor) and $setting.Log (older Az.Monitor)
+            $logEntries = if ($setting.Logs) { $setting.Logs } elseif ($setting.Log) { $setting.Log } else { $null }
+            if ($logEntries) {
+                $enabledCategories = @($logEntries |
                     Where-Object { $_.Enabled -eq $true } |
                     ForEach-Object { $_.Category })
             }
 
-            $missingForSetting = $requiredCategories | Where-Object { $_ -notin $enabledCategories }
+            $missingForSetting = @($requiredCategories | Where-Object { $_ -notin $enabledCategories })
             if ($missingForSetting.Count -eq 0) {
                 $allCategoriesCovered = $true
                 break
@@ -119,7 +121,7 @@ function Test-CIS6112-DiagnosticCategories {
                 -TotalResources 1 -PassedResources 1 -FailedResources 0
         }
 
-        $missingCategories = $requiredCategories | Where-Object { $_ -notin $bestCoverage }
+        $missingCategories = @($requiredCategories | Where-Object { $_ -notin $bestCoverage })
         return New-CISCheckResult `
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
@@ -133,7 +135,7 @@ function Test-CIS6112-DiagnosticCategories {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking diagnostic categories: $($_.Exception.Message)"
+            -Details "Error checking diagnostic categories: $(Format-CISErrorMessage -Message $_.Exception.Message)"
     }
 }
 
@@ -216,7 +218,7 @@ function Test-CIS6114-KeyVaultLogging {
                 }
             }
             catch {
-                $failedList.Add("$($kv.VaultName) [Error: $($_.Exception.Message)]")
+                $failedList.Add("$($kv.VaultName) [Error: $(Format-CISErrorMessage -Message $_.Exception.Message)]")
             }
         }
 
@@ -248,7 +250,7 @@ function Test-CIS6114-KeyVaultLogging {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Key Vault logging: $($_.Exception.Message)"
+            -Details "Error checking Key Vault logging: $(Format-CISErrorMessage -Message $_.Exception.Message)"
     }
 }
 
@@ -281,7 +283,7 @@ function Test-CIS6116-AppServiceHTTPLogs {
                     -ControlId $ControlDef.ControlId `
                     -Title $ControlDef.Title `
                     -Status 'ERROR' `
-                    -Details "Failed to retrieve App Services: $($_.Exception.Message)"
+                    -Details "Failed to retrieve App Services: $(Format-CISErrorMessage -Message $_.Exception.Message)"
             }
         }
 
@@ -337,7 +339,7 @@ function Test-CIS6116-AppServiceHTTPLogs {
                 }
             }
             catch {
-                $failedList.Add("$($app.Name) [Error: $($_.Exception.Message)]")
+                $failedList.Add("$($app.Name) [Error: $(Format-CISErrorMessage -Message $_.Exception.Message)]")
             }
         }
 
@@ -369,7 +371,7 @@ function Test-CIS6116-AppServiceHTTPLogs {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking App Service HTTP logs: $($_.Exception.Message)"
+            -Details "Error checking App Service HTTP logs: $(Format-CISErrorMessage -Message $_.Exception.Message)"
     }
 }
 
@@ -460,7 +462,7 @@ function Test-CIS61211-ServiceHealthAlert {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Service Health alerts: $($_.Exception.Message)"
+            -Details "Error checking Service Health alerts: $(Format-CISErrorMessage -Message $_.Exception.Message)"
     }
 }
 
@@ -509,6 +511,6 @@ function Test-CIS6131-ApplicationInsights {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Error checking Application Insights: $($_.Exception.Message)"
+            -Details "Error checking Application Insights: $(Format-CISErrorMessage -Message $_.Exception.Message)"
     }
 }

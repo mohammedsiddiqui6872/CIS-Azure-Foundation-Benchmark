@@ -51,7 +51,7 @@ function Invoke-DefenderPlanCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to query Defender plan '$($ControlDef.DefenderPlanName)': $($_.Exception.Message)"
+            -Details "Failed to query Defender plan '$($ControlDef.DefenderPlanName)': $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -113,13 +113,8 @@ function Invoke-ActivityLogAlertCheck {
             }
 
             foreach ($cond in $conditions) {
-                # Check Field/Equals pattern (new module)
+                # Check Field/Equals pattern (PowerShell property access is case-insensitive)
                 if ($cond.Field -eq 'operationName' -and $cond.Equals -eq $targetOperation) {
-                    $matchFound = $true
-                    break
-                }
-                # Check legacy property names
-                if ($cond.field -eq 'operationName' -and $cond.equals -eq $targetOperation) {
                     $matchFound = $true
                     break
                 }
@@ -155,7 +150,7 @@ function Invoke-ActivityLogAlertCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to evaluate activity log alerts for '$($ControlDef.OperationName)': $($_.Exception.Message)"
+            -Details "Failed to evaluate activity log alerts for '$($ControlDef.OperationName)': $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -253,29 +248,31 @@ function Invoke-NSGPortCheck {
             $nsgName   = $nsg.Name
             $nsgFailed = $false
 
-            # Combine default and custom security rules
-            $allRules = @()
-            if ($nsg.SecurityRules)        { $allRules += $nsg.SecurityRules }
-            if ($nsg.DefaultSecurityRules) { $allRules += $nsg.DefaultSecurityRules }
+            # Combine default and custom security rules using List for efficiency
+            $allRules = [System.Collections.Generic.List[object]]::new()
+            if ($nsg.SecurityRules)        { $allRules.AddRange(@($nsg.SecurityRules)) }
+            if ($nsg.DefaultSecurityRules) { $allRules.AddRange(@($nsg.DefaultSecurityRules)) }
 
-            foreach ($rule in $allRules) {
-                # Only inspect inbound Allow rules
-                if ($rule.Direction -ne 'Inbound') { continue }
-                if ($rule.Access    -ne 'Allow')   { continue }
+            # Sort rules by priority (lowest number = highest priority, evaluated first)
+            $sortedRules = $allRules | Where-Object { $_.Direction -eq 'Inbound' } |
+                Sort-Object { [int]$_.Priority }
 
+            # Evaluate rules in priority order — a Deny rule at higher priority blocks the port
+            $portExposed = $false
+            foreach ($rule in $sortedRules) {
                 # Check protocol match (TCP, UDP, or * for any)
                 $ruleProtocol = $rule.Protocol
                 if ($ruleProtocol -ne '*' -and $ruleProtocol -ne $protocol) { continue }
 
                 # Check if the source is an Internet address
                 $sourceMatched = $false
-                $sourcePrefixes = @()
+                $sourcePrefixes = [System.Collections.Generic.List[string]]::new()
 
                 if ($rule.SourceAddressPrefix) {
-                    $sourcePrefixes += $rule.SourceAddressPrefix
+                    $sourcePrefixes.Add($rule.SourceAddressPrefix)
                 }
                 if ($rule.SourceAddressPrefixes) {
-                    $sourcePrefixes += $rule.SourceAddressPrefixes
+                    foreach ($sp in $rule.SourceAddressPrefixes) { $sourcePrefixes.Add($sp) }
                 }
 
                 foreach ($prefix in $sourcePrefixes) {
@@ -289,20 +286,22 @@ function Invoke-NSGPortCheck {
 
                 # Check if destination port matches
                 $portMatched = $false
-                $destPorts   = @()
+                $destPorts = [System.Collections.Generic.List[string]]::new()
 
                 if ($rule.DestinationPortRange) {
-                    $destPorts += $rule.DestinationPortRange
+                    $destPorts.Add($rule.DestinationPortRange)
                 }
                 if ($rule.DestinationPortRanges) {
-                    $destPorts += $rule.DestinationPortRanges
+                    foreach ($dp in $rule.DestinationPortRanges) { $destPorts.Add($dp) }
                 }
 
                 if ($checkAllPorts) {
-                    # Port=-1: flag any rule that allows ANY traffic for this protocol from the Internet
-                    # A wildcard or any explicit range means exposure
-                    if ($destPorts.Count -gt 0) {
-                        $portMatched = $true
+                    # Port=-1: only flag wildcard rules that allow ALL traffic (e.g., '*' or '0-65535')
+                    foreach ($portRange in $destPorts) {
+                        if ($portRange -eq '*' -or $portRange -eq '0-65535') {
+                            $portMatched = $true
+                            break
+                        }
                     }
                 }
                 else {
@@ -318,12 +317,21 @@ function Invoke-NSGPortCheck {
                 }
 
                 if ($portMatched) {
-                    $nsgFailed = $true
-                    break
+                    if ($rule.Access -eq 'Deny') {
+                        # A higher-priority Deny rule blocks this port — port is NOT exposed
+                        $portExposed = $false
+                        break
+                    }
+                    else {
+                        # An Allow rule exposes the port, but keep checking for higher-priority Deny
+                        $portExposed = $true
+                        $nsgFailed = $true
+                        break
+                    }
                 }
             }
 
-            if ($nsgFailed) {
+            if ($nsgFailed -and $portExposed) {
                 $failedNSGs++
                 $affected.Add("NSG:$nsgName (allows $serviceName from Internet)")
             }
@@ -359,7 +367,7 @@ function Invoke-NSGPortCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to evaluate NSG rules for $($ControlDef.ServiceName): $($_.Exception.Message)"
+            -Details "Failed to evaluate NSG rules for $($ControlDef.ServiceName): $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -476,7 +484,7 @@ function Invoke-StorageAccountPropertyCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to check storage account property '$($ControlDef.PropertyPath)': $($_.Exception.Message)"
+            -Details "Failed to check storage account property '$($ControlDef.PropertyPath)': $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -596,7 +604,7 @@ function Invoke-StorageBlobPropertyCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to check blob property '$($ControlDef.CheckType)': $($_.Exception.Message)"
+            -Details "Failed to check blob property '$($ControlDef.CheckType)': $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -736,7 +744,7 @@ function Invoke-StorageFilePropertyCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to check file service property '$($ControlDef.CheckType)': $($_.Exception.Message)"
+            -Details "Failed to check file service property '$($ControlDef.CheckType)': $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -750,7 +758,8 @@ function Invoke-KeyVaultPropertyCheck {
         Checks a property on each Key Vault against an expected value.
     .DESCRIPTION
         The cached Key Vault list from Get-AzKeyVault returns basic info only.
-        This function retrieves full details via Get-AzKeyVault -VaultName for each vault,
+        This function uses pre-fetched full vault details from CachedKeyVaultDetails
+        (falling back to Get-AzKeyVault -VaultName per vault if not cached),
         then navigates the PropertyPath and compares to ExpectedValue.
     #>
     [CmdletBinding()]
@@ -759,7 +768,10 @@ function Invoke-KeyVaultPropertyCheck {
         [hashtable]$ControlDef,
 
         [Parameter()]
-        [object[]]$CachedKeyVaults = @()
+        [object[]]$CachedKeyVaults = @(),
+
+        [Parameter()]
+        [hashtable]$CachedKeyVaultDetails = @{}
     )
 
     try {
@@ -777,18 +789,23 @@ function Invoke-KeyVaultPropertyCheck {
                 -FailedResources 0
         }
 
-        $total    = $CachedKeyVaults.Count
-        $passed   = 0
-        $failed   = 0
-        $affected = [System.Collections.Generic.List[string]]::new()
+        $total        = $CachedKeyVaults.Count
+        $passed       = 0
+        $failed       = 0
+        $accessErrors = 0
+        $affected     = [System.Collections.Generic.List[string]]::new()
 
         foreach ($kv in $CachedKeyVaults) {
             $vaultName = $kv.VaultName
             $rgName    = $kv.ResourceGroupName
 
             try {
-                # Retrieve full vault details
-                $vaultDetail = Get-AzKeyVault -VaultName $vaultName -ResourceGroupName $rgName -ErrorAction Stop
+                # Retrieve full vault details (prefer cache to avoid N+1 API calls)
+                $vaultDetail = if ($CachedKeyVaultDetails.ContainsKey($vaultName)) {
+                    $CachedKeyVaultDetails[$vaultName]
+                } else {
+                    Get-AzKeyVault -VaultName $vaultName -ResourceGroupName $rgName -ErrorAction Stop
+                }
 
                 # Navigate dot-notation property path
                 $currentObj = $vaultDetail
@@ -832,12 +849,29 @@ function Invoke-KeyVaultPropertyCheck {
                 }
             }
             catch {
-                $failed++
-                $affected.Add("KeyVault:$vaultName (error retrieving details - $($_.Exception.Message))")
+                if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization|Forbidden|AccessDenied') {
+                    $accessErrors++
+                    $affected.Add("KeyVault:$vaultName (access denied - insufficient permissions)")
+                } else {
+                    $failed++
+                    $affected.Add("KeyVault:$vaultName (error: $(Format-CISErrorMessage $_.Exception.Message))")
+                }
             }
         }
 
-        if ($failed -eq 0) {
+        if ($failed -eq 0 -and $accessErrors -gt 0) {
+            # Only access errors, no actual compliance failures — report WARNING
+            return New-CISCheckResult `
+                -ControlId $ControlDef.ControlId `
+                -Title $ControlDef.Title `
+                -Status 'WARNING' `
+                -Details "Could not access $accessErrors of $total Key Vault(s) due to insufficient permissions. Accessible vaults ($passed) comply with $propertyPath='$expectedValue'." `
+                -AffectedResources $affected.ToArray() `
+                -TotalResources $total `
+                -PassedResources $passed `
+                -FailedResources 0
+        }
+        elseif ($failed -eq 0 -and $accessErrors -eq 0) {
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
@@ -848,11 +882,12 @@ function Invoke-KeyVaultPropertyCheck {
                 -FailedResources 0
         }
         else {
+            $statusNote = if ($accessErrors -gt 0) { " ($accessErrors additional vault(s) could not be accessed)" } else { '' }
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
                 -Status 'FAIL' `
-                -Details "$failed of $total Key Vaults do not have $propertyPath set to '$expectedValue'." `
+                -Details "$failed of $total Key Vaults do not have $propertyPath set to '$expectedValue'.$statusNote" `
                 -AffectedResources $affected.ToArray() `
                 -TotalResources $total `
                 -PassedResources $passed `
@@ -864,7 +899,7 @@ function Invoke-KeyVaultPropertyCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to check Key Vault property '$($ControlDef.PropertyPath)': $($_.Exception.Message)"
+            -Details "Failed to check Key Vault property '$($ControlDef.PropertyPath)': $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -879,6 +914,7 @@ function Invoke-KeyVaultKeyExpiryCheck {
     .DESCRIPTION
         Filters Key Vaults by VaultType (RBAC or NonRBAC) based on EnableRbacAuthorization,
         then retrieves keys for each vault and verifies each key has an expiration date.
+        Uses pre-fetched vault details from CachedKeyVaultDetails when available.
     #>
     [CmdletBinding()]
     param(
@@ -886,7 +922,10 @@ function Invoke-KeyVaultKeyExpiryCheck {
         [hashtable]$ControlDef,
 
         [Parameter()]
-        [object[]]$CachedKeyVaults = @()
+        [object[]]$CachedKeyVaults = @(),
+
+        [Parameter()]
+        [hashtable]$CachedKeyVaultDetails = @{}
     )
 
     try {
@@ -903,10 +942,11 @@ function Invoke-KeyVaultKeyExpiryCheck {
                 -FailedResources 0
         }
 
-        $totalKeys  = 0
-        $passedKeys = 0
-        $failedKeys = 0
-        $affected   = [System.Collections.Generic.List[string]]::new()
+        $totalKeys     = 0
+        $passedKeys    = 0
+        $failedKeys    = 0
+        $accessErrors  = 0
+        $affected      = [System.Collections.Generic.List[string]]::new()
         $vaultsChecked = 0
 
         foreach ($kv in $CachedKeyVaults) {
@@ -914,8 +954,12 @@ function Invoke-KeyVaultKeyExpiryCheck {
             $rgName    = $kv.ResourceGroupName
 
             try {
-                # Get full vault details to check RBAC authorization
-                $vaultDetail = Get-AzKeyVault -VaultName $vaultName -ResourceGroupName $rgName -ErrorAction Stop
+                # Get full vault details to check RBAC authorization (prefer cache)
+                $vaultDetail = if ($CachedKeyVaultDetails.ContainsKey($vaultName)) {
+                    $CachedKeyVaultDetails[$vaultName]
+                } else {
+                    Get-AzKeyVault -VaultName $vaultName -ResourceGroupName $rgName -ErrorAction Stop
+                }
 
                 $isRBAC = ($vaultDetail.EnableRbacAuthorization -eq $true)
 
@@ -929,9 +973,6 @@ function Invoke-KeyVaultKeyExpiryCheck {
                 $keys = @(Get-AzKeyVaultKey -VaultName $vaultName -ErrorAction Stop)
 
                 foreach ($key in $keys) {
-                    # Skip disabled keys
-                    if ($key.Enabled -eq $false) { continue }
-
                     $totalKeys++
 
                     if ($null -ne $key.Expires) {
@@ -944,9 +985,23 @@ function Invoke-KeyVaultKeyExpiryCheck {
                 }
             }
             catch {
-                # Access denied or other error on specific vault - record but continue
-                $affected.Add("KeyVault:$vaultName (error listing keys - $($_.Exception.Message))")
+                if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization|Forbidden|AccessDenied') {
+                    $accessErrors++
+                    $affected.Add("KeyVault:$vaultName (access denied - insufficient permissions)")
+                } else {
+                    $affected.Add("KeyVault:$vaultName (error listing keys - $(Format-CISErrorMessage $_.Exception.Message))")
+                }
             }
+        }
+
+        if ($vaultsChecked -eq 0 -and $accessErrors -gt 0) {
+            return New-CISCheckResult `
+                -ControlId $ControlDef.ControlId `
+                -Title $ControlDef.Title `
+                -Status 'WARNING' `
+                -Details "Could not access any $vaultType Key Vault(s) due to insufficient permissions ($accessErrors vault(s))." `
+                -AffectedResources $affected.ToArray() `
+                -TotalResources 0 -PassedResources 0 -FailedResources 0
         }
 
         if ($vaultsChecked -eq 0) {
@@ -960,7 +1015,7 @@ function Invoke-KeyVaultKeyExpiryCheck {
                 -FailedResources 0
         }
 
-        if ($failedKeys -eq 0 -and $affected.Count -eq 0) {
+        if ($failedKeys -eq 0 -and $accessErrors -eq 0) {
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
@@ -970,12 +1025,24 @@ function Invoke-KeyVaultKeyExpiryCheck {
                 -PassedResources $passedKeys `
                 -FailedResources 0
         }
+        elseif ($failedKeys -eq 0 -and $accessErrors -gt 0) {
+            return New-CISCheckResult `
+                -ControlId $ControlDef.ControlId `
+                -Title $ControlDef.Title `
+                -Status 'WARNING' `
+                -Details "All accessible keys ($passedKeys) have expiration dates, but $accessErrors vault(s) could not be accessed." `
+                -AffectedResources $affected.ToArray() `
+                -TotalResources $totalKeys `
+                -PassedResources $passedKeys `
+                -FailedResources 0
+        }
         else {
+            $accessNote = if ($accessErrors -gt 0) { " ($accessErrors additional vault(s) inaccessible)" } else { '' }
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
                 -Status 'FAIL' `
-                -Details "$failedKeys of $totalKeys key(s) across $vaultsChecked $vaultType vault(s) do not have an expiration date." `
+                -Details "$failedKeys of $totalKeys key(s) across $vaultsChecked $vaultType vault(s) do not have an expiration date.$accessNote" `
                 -AffectedResources $affected.ToArray() `
                 -TotalResources $totalKeys `
                 -PassedResources $passedKeys `
@@ -987,7 +1054,7 @@ function Invoke-KeyVaultKeyExpiryCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to check Key Vault key expiry ($($ControlDef.VaultType)): $($_.Exception.Message)"
+            -Details "Failed to check Key Vault key expiry ($($ControlDef.VaultType)): $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -1002,6 +1069,7 @@ function Invoke-KeyVaultSecretExpiryCheck {
     .DESCRIPTION
         Filters Key Vaults by VaultType (RBAC or NonRBAC) based on EnableRbacAuthorization,
         then retrieves secrets for each vault and verifies each secret has an expiration date.
+        Uses pre-fetched vault details from CachedKeyVaultDetails when available.
     #>
     [CmdletBinding()]
     param(
@@ -1009,7 +1077,10 @@ function Invoke-KeyVaultSecretExpiryCheck {
         [hashtable]$ControlDef,
 
         [Parameter()]
-        [object[]]$CachedKeyVaults = @()
+        [object[]]$CachedKeyVaults = @(),
+
+        [Parameter()]
+        [hashtable]$CachedKeyVaultDetails = @{}
     )
 
     try {
@@ -1026,19 +1097,24 @@ function Invoke-KeyVaultSecretExpiryCheck {
                 -FailedResources 0
         }
 
-        $totalSecrets  = 0
-        $passedSecrets = 0
-        $failedSecrets = 0
-        $affected      = [System.Collections.Generic.List[string]]::new()
-        $vaultsChecked = 0
+        $totalSecrets   = 0
+        $passedSecrets  = 0
+        $failedSecrets  = 0
+        $accessErrors   = 0
+        $affected       = [System.Collections.Generic.List[string]]::new()
+        $vaultsChecked  = 0
 
         foreach ($kv in $CachedKeyVaults) {
             $vaultName = $kv.VaultName
             $rgName    = $kv.ResourceGroupName
 
             try {
-                # Get full vault details to check RBAC authorization
-                $vaultDetail = Get-AzKeyVault -VaultName $vaultName -ResourceGroupName $rgName -ErrorAction Stop
+                # Get full vault details to check RBAC authorization (prefer cache)
+                $vaultDetail = if ($CachedKeyVaultDetails.ContainsKey($vaultName)) {
+                    $CachedKeyVaultDetails[$vaultName]
+                } else {
+                    Get-AzKeyVault -VaultName $vaultName -ResourceGroupName $rgName -ErrorAction Stop
+                }
 
                 $isRBAC = ($vaultDetail.EnableRbacAuthorization -eq $true)
 
@@ -1052,9 +1128,6 @@ function Invoke-KeyVaultSecretExpiryCheck {
                 $secrets = @(Get-AzKeyVaultSecret -VaultName $vaultName -ErrorAction Stop)
 
                 foreach ($secret in $secrets) {
-                    # Skip disabled secrets
-                    if ($secret.Enabled -eq $false) { continue }
-
                     $totalSecrets++
 
                     if ($null -ne $secret.Expires) {
@@ -1067,9 +1140,23 @@ function Invoke-KeyVaultSecretExpiryCheck {
                 }
             }
             catch {
-                # Access denied or other error on specific vault - record but continue
-                $affected.Add("KeyVault:$vaultName (error listing secrets - $($_.Exception.Message))")
+                if ($_.Exception.Message -match 'AuthorizationFailed|does not have authorization|Forbidden|AccessDenied') {
+                    $accessErrors++
+                    $affected.Add("KeyVault:$vaultName (access denied - insufficient permissions)")
+                } else {
+                    $affected.Add("KeyVault:$vaultName (error listing secrets - $(Format-CISErrorMessage $_.Exception.Message))")
+                }
             }
+        }
+
+        if ($vaultsChecked -eq 0 -and $accessErrors -gt 0) {
+            return New-CISCheckResult `
+                -ControlId $ControlDef.ControlId `
+                -Title $ControlDef.Title `
+                -Status 'WARNING' `
+                -Details "Could not access any $vaultType Key Vault(s) due to insufficient permissions ($accessErrors vault(s))." `
+                -AffectedResources $affected.ToArray() `
+                -TotalResources 0 -PassedResources 0 -FailedResources 0
         }
 
         if ($vaultsChecked -eq 0) {
@@ -1083,7 +1170,7 @@ function Invoke-KeyVaultSecretExpiryCheck {
                 -FailedResources 0
         }
 
-        if ($failedSecrets -eq 0 -and $affected.Count -eq 0) {
+        if ($failedSecrets -eq 0 -and $accessErrors -eq 0) {
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
@@ -1093,12 +1180,24 @@ function Invoke-KeyVaultSecretExpiryCheck {
                 -PassedResources $passedSecrets `
                 -FailedResources 0
         }
+        elseif ($failedSecrets -eq 0 -and $accessErrors -gt 0) {
+            return New-CISCheckResult `
+                -ControlId $ControlDef.ControlId `
+                -Title $ControlDef.Title `
+                -Status 'WARNING' `
+                -Details "All accessible secrets ($passedSecrets) have expiration dates, but $accessErrors vault(s) could not be accessed." `
+                -AffectedResources $affected.ToArray() `
+                -TotalResources $totalSecrets `
+                -PassedResources $passedSecrets `
+                -FailedResources 0
+        }
         else {
+            $accessNote = if ($accessErrors -gt 0) { " ($accessErrors additional vault(s) inaccessible)" } else { '' }
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
                 -Status 'FAIL' `
-                -Details "$failedSecrets of $totalSecrets secret(s) across $vaultsChecked $vaultType vault(s) do not have an expiration date." `
+                -Details "$failedSecrets of $totalSecrets secret(s) across $vaultsChecked $vaultType vault(s) do not have an expiration date.$accessNote" `
                 -AffectedResources $affected.ToArray() `
                 -TotalResources $totalSecrets `
                 -PassedResources $passedSecrets `
@@ -1110,7 +1209,7 @@ function Invoke-KeyVaultSecretExpiryCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to check Key Vault secret expiry ($($ControlDef.VaultType)): $($_.Exception.Message)"
+            -Details "Failed to check Key Vault secret expiry ($($ControlDef.VaultType)): $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -1166,8 +1265,10 @@ function Invoke-DiagnosticSettingCheck {
                         $found = $false
                         foreach ($ds in $diagSettings) {
                             $enabledLogs = @()
-                            if ($ds.Log) {
-                                $enabledLogs = @($ds.Log | Where-Object { $_.Enabled -eq $true } |
+                            # Support both $ds.Logs (newer Az.Monitor) and $ds.Log (older Az.Monitor)
+                            $logEntries = if ($ds.Logs) { $ds.Logs } elseif ($ds.Log) { $ds.Log } else { $null }
+                            if ($logEntries) {
+                                $enabledLogs = @($logEntries | Where-Object { $_.Enabled -eq $true } |
                                     ForEach-Object { $_.Category })
                             }
                             if ($reqCat -in $enabledLogs) {
@@ -1286,7 +1387,7 @@ function Invoke-DiagnosticSettingCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to check diagnostic settings: $($_.Exception.Message)"
+            -Details "Failed to check diagnostic settings: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -1326,8 +1427,29 @@ function Invoke-GraphAPIPropertyCheck {
         $propertyPath  = $ControlDef.PropertyPath
         $expectedValue = $ControlDef.ExpectedValue
 
-        # Build the full Graph API URL
+        # Build the full Graph API URL with security validation
         $graphUrl = if ($endpoint -match '^https?://') {
+            # Validate that full URLs only point to trusted Microsoft Graph endpoints
+            $allowedPrefixes = @(
+                'https://graph.microsoft.com/',
+                'https://graph.microsoft.us/',
+                'https://graph.microsoft.de/',
+                'https://microsoftgraph.chinacloudapi.cn/'
+            )
+            $isTrusted = $false
+            foreach ($prefix in $allowedPrefixes) {
+                if ($endpoint.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $isTrusted = $true
+                    break
+                }
+            }
+            if (-not $isTrusted) {
+                return New-CISCheckResult `
+                    -ControlId $ControlDef.ControlId `
+                    -Title $ControlDef.Title `
+                    -Status 'ERROR' `
+                    -Details "Graph endpoint URL '$endpoint' is not a trusted Microsoft Graph domain. Aborting to prevent token leakage."
+            }
             $endpoint
         }
         else {
@@ -1424,7 +1546,7 @@ function Invoke-GraphAPIPropertyCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to query Graph API endpoint '$($ControlDef.GraphEndpoint)': $($_.Exception.Message)"
+            -Details "Failed to query Graph API endpoint '$($ControlDef.GraphEndpoint)': $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
@@ -1466,7 +1588,7 @@ function Invoke-ManualCheck {
             -ControlId $ControlDef.ControlId `
             -Title $ControlDef.Title `
             -Status 'ERROR' `
-            -Details "Failed to generate manual check result: $($_.Exception.Message)"
+            -Details "Failed to generate manual check result: $(Format-CISErrorMessage $_.Exception.Message)"
     }
 }
 
