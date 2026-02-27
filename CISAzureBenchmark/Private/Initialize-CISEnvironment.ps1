@@ -61,6 +61,7 @@ function Initialize-CISEnvironment {
         SubscriptionId    = ''
         SubscriptionName  = ''
         TenantId          = ''
+        ScannedBy         = ''
         NeedsGraph        = $false
         GraphConnected    = $false
         ScanTimestamp     = [DateTime]::UtcNow.ToString('o')
@@ -157,6 +158,7 @@ function Initialize-CISEnvironment {
                 $envInfo.SubscriptionId   = $azContext.Subscription.Id
                 $envInfo.SubscriptionName = $azContext.Subscription.Name
                 $envInfo.TenantId         = $azContext.Tenant.Id
+                $envInfo.ScannedBy        = if ($azContext.Account.Id) { $azContext.Account.Id } else { '' }
             }
         }
 
@@ -209,6 +211,7 @@ function Initialize-CISEnvironment {
                 $envInfo.SubscriptionId   = $azContext.Subscription.Id
                 $envInfo.SubscriptionName = $azContext.Subscription.Name
                 $envInfo.TenantId         = $azContext.Tenant.Id
+                $envInfo.ScannedBy        = if ($azContext.Account.Id) { $azContext.Account.Id } else { '' }
             }
         }
         catch { Write-Verbose "Could not retrieve Azure context: $($_.Exception.Message)" }

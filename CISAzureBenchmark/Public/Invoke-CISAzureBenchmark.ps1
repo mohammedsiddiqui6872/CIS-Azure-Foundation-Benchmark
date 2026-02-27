@@ -329,6 +329,7 @@ function Invoke-CISAzureBenchmark {
                 SubscriptionName = $envInfo.SubscriptionName
                 SubscriptionId   = $envInfo.SubscriptionId
                 TenantId         = $envInfo.TenantId
+                ScannedBy        = $envInfo.ScannedBy
                 ScanTimestamp    = $envInfo.ScanTimestamp
             })
 
@@ -465,6 +466,7 @@ function Invoke-CISAzureBenchmark {
                     SubscriptionName = $envInfo.SubscriptionName
                     SubscriptionId   = $envInfo.SubscriptionId
                     TenantId         = $envInfo.TenantId
+                    ScannedBy        = $envInfo.ScannedBy
                     ScanTimestamp    = $envInfo.ScanTimestamp
                 }
             }
@@ -628,6 +630,7 @@ function Invoke-CISAzureBenchmark {
         SubscriptionName = 'Unknown'
         SubscriptionId   = 'Unknown'
         TenantId         = 'Unknown'
+        ScannedBy        = ''
         ScanTimestamp    = [DateTime]::UtcNow.ToString('o')
     } }
 

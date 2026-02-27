@@ -147,7 +147,7 @@ a:hover { text-decoration: underline; }
   background: var(--bg-header);
   padding: 32px 40px;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .report-header::before {
@@ -159,6 +159,8 @@ a:hover { text-decoration: underline; }
   height: 500px;
   background: radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 70%);
   border-radius: 50%;
+  pointer-events: none;
+  clip-path: inset(0);
 }
 
 .report-header::after {
@@ -170,6 +172,8 @@ a:hover { text-decoration: underline; }
   height: 300px;
   background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%);
   border-radius: 50%;
+  pointer-events: none;
+  clip-path: inset(0);
 }
 
 .header-content {
@@ -187,36 +191,6 @@ a:hover { text-decoration: underline; }
   flex: 1;
 }
 
-.header-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255,255,255,0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 20px;
-  padding: 5px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.9);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  margin-bottom: 16px;
-}
-
-.header-badge .badge-dot {
-  width: 6px;
-  height: 6px;
-  background: var(--color-pass);
-  border-radius: 50%;
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.3); }
-}
-
 .header-title {
   font-size: 26px;
   font-weight: 700;
@@ -231,50 +205,107 @@ a:hover { text-decoration: underline; }
   font-weight: 400;
 }
 
-.header-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  margin-top: 18px;
-}
-
-.meta-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: rgba(255,255,255,0.7);
-}
-
-.meta-item .meta-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 6px;
-  font-size: 13px;
-}
-
-.meta-item .meta-label {
-  font-weight: 500;
-  color: rgba(255,255,255,0.5);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.meta-item .meta-value {
-  color: rgba(255,255,255,0.9);
-  font-weight: 500;
-}
-
 .header-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 12px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Info Dropdown */
+.info-dropdown-wrap {
+  position: relative;
+}
+
+.info-dropdown-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 30px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+  padding: 0;
+  color: rgba(255,255,255,0.8);
+  font-size: 16px;
+}
+
+.info-dropdown-btn:hover {
+  background: rgba(255,255,255,0.18);
+}
+
+.info-dropdown-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 340px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  overflow: hidden;
+  animation: dropdown-in 0.2s ease;
+}
+
+.info-dropdown-panel.open {
+  display: block;
+}
+
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.info-dropdown-panel .info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.info-dropdown-panel .info-item:last-child {
+  border-bottom: none;
+}
+
+.info-dropdown-panel .info-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.info-dropdown-panel .info-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+}
+
+.info-dropdown-panel .info-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.info-dropdown-panel .info-value.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 /* Theme Toggle */
@@ -1321,7 +1352,7 @@ a:hover { text-decoration: underline; }
   .header-content { flex-direction: column; }
   .header-right { flex-direction: row; align-items: center; }
   .stat-cards { grid-template-columns: repeat(3, 1fr); }
-  .header-meta { gap: 12px; }
+  .info-dropdown-panel { min-width: 280px; right: auto; left: 0; }
   .detail-grid { grid-template-columns: 1fr; }
   .table-toolbar { flex-direction: column; }
   .search-box { min-width: 100%; }
@@ -1377,6 +1408,7 @@ a:hover { text-decoration: underline; }
   }
 
   .theme-toggle,
+  .info-dropdown-wrap,
   .table-toolbar,
   .no-print {
     display: none !important;
@@ -1412,47 +1444,57 @@ a:hover { text-decoration: underline; }
 <header class="report-header">
   <div class="header-content">
     <div class="header-left">
-      <div class="header-badge">
-        <span class="badge-dot"></span>
-        Compliance Report
-      </div>
       <h1 class="header-title">CIS Microsoft Azure Foundations Benchmark {{BENCHMARK_VERSION}}</h1>
       <p class="header-subtitle">Security compliance assessment and detailed findings report</p>
-      <div class="header-meta">
-        <div class="meta-item">
-          <span class="meta-icon">&#9729;</span>
-          <div>
-            <div class="meta-label">Subscription</div>
-            <div class="meta-value">{{SUBSCRIPTION_NAME}}</div>
-          </div>
-        </div>
-        <div class="meta-item">
-          <span class="meta-icon">&#128273;</span>
-          <div>
-            <div class="meta-label">Subscription ID</div>
-            <div class="meta-value" style="font-family: var(--font-mono); font-size: 12px;">{{SUBSCRIPTION_ID}}</div>
-          </div>
-        </div>
-        <div class="meta-item">
-          <span class="meta-icon">&#127970;</span>
-          <div>
-            <div class="meta-label">Tenant ID</div>
-            <div class="meta-value" style="font-family: var(--font-mono); font-size: 12px;">{{TENANT_ID}}</div>
-          </div>
-        </div>
-        <div class="meta-item">
-          <span class="meta-icon">&#128339;</span>
-          <div>
-            <div class="meta-label">Scanned</div>
-            <div class="meta-value" id="scanTimestamp">{{SCAN_TIMESTAMP}}</div>
-          </div>
-        </div>
-      </div>
     </div>
     <div class="header-right">
-      <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode" aria-label="Toggle theme">
-        <span class="toggle-thumb"></span>
-      </button>
+      <div class="header-actions">
+        <div class="info-dropdown-wrap">
+          <button class="info-dropdown-btn" id="infoDropdownBtn" title="Scan details" aria-label="Show scan details">
+            <span>&#9432;</span>
+          </button>
+          <div class="info-dropdown-panel" id="infoDropdownPanel">
+            <div class="info-item">
+              <span class="info-icon">&#9729;</span>
+              <div>
+                <div class="info-label">Subscription</div>
+                <div class="info-value">{{SUBSCRIPTION_NAME}}</div>
+              </div>
+            </div>
+            <div class="info-item">
+              <span class="info-icon">&#128273;</span>
+              <div>
+                <div class="info-label">Subscription ID</div>
+                <div class="info-value mono">{{SUBSCRIPTION_ID}}</div>
+              </div>
+            </div>
+            <div class="info-item">
+              <span class="info-icon">&#127970;</span>
+              <div>
+                <div class="info-label">Tenant ID</div>
+                <div class="info-value mono">{{TENANT_ID}}</div>
+              </div>
+            </div>
+            <div class="info-item">
+              <span class="info-icon">&#128100;</span>
+              <div>
+                <div class="info-label">Scanned By</div>
+                <div class="info-value">{{SCANNED_BY}}</div>
+              </div>
+            </div>
+            <div class="info-item">
+              <span class="info-icon">&#128339;</span>
+              <div>
+                <div class="info-label">Scanned</div>
+                <div class="info-value" id="scanTimestamp">{{SCAN_TIMESTAMP}}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode" aria-label="Toggle theme">
+          <span class="toggle-thumb"></span>
+        </button>
+      </div>
     </div>
   </div>
 </header>
@@ -1752,6 +1794,23 @@ var MULTI_SUB_DATA = {{MULTI_SUB_DATA}};
     document.documentElement.setAttribute('data-theme', next);
     try { localStorage.setItem('cis-report-theme', next); } catch(e) {}
   });
+
+  /* ===========================================================
+     INFO DROPDOWN
+     =========================================================== */
+  var infoBtn = document.getElementById('infoDropdownBtn');
+  var infoPanel = document.getElementById('infoDropdownPanel');
+  if (infoBtn && infoPanel) {
+    infoBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      infoPanel.classList.toggle('open');
+    });
+    document.addEventListener('click', function(e) {
+      if (!infoPanel.contains(e.target) && e.target !== infoBtn) {
+        infoPanel.classList.remove('open');
+      }
+    });
+  }
 
   /* ===========================================================
      FORMAT SCAN TIMESTAMP

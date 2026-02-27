@@ -125,6 +125,8 @@ function New-CISHtmlReport {
     $html = $html -replace '\{\{SUBSCRIPTION_NAME\}\}', (Encode-HtmlSafe $subName)
     $html = $html -replace '\{\{SUBSCRIPTION_ID\}\}', (Encode-HtmlSafe $subId)
     $html = $html -replace '\{\{TENANT_ID\}\}', (Encode-HtmlSafe $tenId)
+    $scannedBy = if ($Metadata.ScannedBy) { $Metadata.ScannedBy } else { 'N/A' }
+    $html = $html -replace '\{\{SCANNED_BY\}\}', (Encode-HtmlSafe $scannedBy)
     $html = $html -replace '\{\{OVERALL_SCORE\}\}', $overallScore.ToString()
     $html = $html -replace '\{\{TOTAL_CONTROLS\}\}', $total.ToString()
     $html = $html -replace '\{\{PASS_COUNT\}\}', $pass.ToString()
