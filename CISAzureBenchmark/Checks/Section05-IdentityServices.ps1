@@ -61,7 +61,7 @@ function Test-CIS512-MFAAllUsers {
         # Exclude guest users and disabled accounts - CIS requirement targets active organization members only
         $allUsers = @($allUsers | Where-Object {
             $_.userType -ne 'Guest' -and
-            $_.isAdmin -ne $null -or $_.userPrincipalName -ne $null  # ensure valid user objects
+            ($_.isAdmin -ne $null -or $_.userPrincipalName -ne $null)  # ensure valid user objects
         })
         # Filter out disabled accounts if the property is available
         $allUsers = @($allUsers | Where-Object {
@@ -186,10 +186,11 @@ function Test-CIS512-MFAAllUsers-Fallback {
                 -TotalResources $totalCount -PassedResources 0 -FailedResources 0
         }
 
-        # MFA-capable method type fragments (OData type contains these)
+        # Strong MFA method type fragments only — per CIS v5.0.0 and NIST SP 800-63B,
+        # phone/SMS and TemporaryAccessPass are not considered strong MFA methods
         $mfaMethodTypes = @(
-            'Fido2', 'MicrosoftAuthenticator', 'PhoneAuthentication',
-            'SoftwareOath', 'TemporaryAccessPass', 'WindowsHelloForBusiness',
+            'Fido2', 'MicrosoftAuthenticator',
+            'SoftwareOath', 'WindowsHelloForBusiness',
             'Passkey'
         )
 

@@ -189,8 +189,10 @@ function Test-CIS6114-KeyVaultLogging {
                 # Check for audit log category enabled
                 $hasAuditLog = $false
                 foreach ($setting in $diagSettings) {
-                    if ($setting.Log) {
-                        $auditLog = $setting.Log | Where-Object {
+                    # Support both $setting.Logs (newer Az.Monitor) and $setting.Log (older Az.Monitor)
+                    $logEntries = if ($setting.Logs) { $setting.Logs } elseif ($setting.Log) { $setting.Log } else { $null }
+                    if ($logEntries) {
+                        $auditLog = $logEntries | Where-Object {
                             ($_.Category -eq 'AuditEvent' -or $_.Category -eq 'audit') -and $_.Enabled -eq $true
                         }
                         if ($auditLog) {
@@ -311,8 +313,10 @@ function Test-CIS6116-AppServiceHTTPLogs {
 
                 $hasHttpLogs = $false
                 foreach ($setting in $diagSettings) {
-                    if ($setting.Log) {
-                        $httpLog = $setting.Log | Where-Object {
+                    # Support both $setting.Logs (newer Az.Monitor) and $setting.Log (older Az.Monitor)
+                    $logEntries = if ($setting.Logs) { $setting.Logs } elseif ($setting.Log) { $setting.Log } else { $null }
+                    if ($logEntries) {
+                        $httpLog = $logEntries | Where-Object {
                             ($_.Category -eq 'AppServiceHTTPLogs' -or $_.Category -eq 'HttpLogs') -and $_.Enabled -eq $true
                         }
                         if ($httpLog) {

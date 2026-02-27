@@ -91,6 +91,7 @@ function Invoke-ActivityLogAlertCheck {
         }
 
         $matchFound = $false
+        $matchedAlert = $null
 
         foreach ($alert in $CachedAlerts) {
             # Skip disabled alerts
@@ -116,6 +117,7 @@ function Invoke-ActivityLogAlertCheck {
                 # Check Field/Equals pattern (PowerShell property access is case-insensitive)
                 if ($cond.Field -eq 'operationName' -and $cond.Equals -eq $targetOperation) {
                     $matchFound = $true
+                    $matchedAlert = $alert
                     break
                 }
             }
@@ -124,11 +126,31 @@ function Invoke-ActivityLogAlertCheck {
         }
 
         if ($matchFound) {
+            # Verify the alert has at least one action group configured
+            $actionGroups = @()
+            if ($matchedAlert.Action -and $matchedAlert.Action.ActionGroup) {
+                $actionGroups = @($matchedAlert.Action.ActionGroup)
+            } elseif ($matchedAlert.ActionGroup) {
+                $actionGroups = @($matchedAlert.ActionGroup)
+            }
+
+            if ($actionGroups.Count -eq 0) {
+                return New-CISCheckResult `
+                    -ControlId $ControlDef.ControlId `
+                    -Title $ControlDef.Title `
+                    -Status 'WARNING' `
+                    -Details "An activity log alert exists for '$targetOperation' but has no action groups configured. Notifications will not be sent." `
+                    -AffectedResources @("Alert:$($matchedAlert.Name) (no action groups)") `
+                    -TotalResources 1 `
+                    -PassedResources 0 `
+                    -FailedResources 1
+            }
+
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
                 -Status 'PASS' `
-                -Details "An enabled activity log alert exists for operation '$targetOperation'." `
+                -Details "An enabled activity log alert exists for operation '$targetOperation' with $($actionGroups.Count) action group(s)." `
                 -TotalResources 1 `
                 -PassedResources 1 `
                 -FailedResources 0
@@ -442,7 +464,14 @@ function Invoke-StorageAccountPropertyCheck {
                 $isMatch = ($null -eq $actualValue)
             }
             elseif ($expectedValue -is [bool]) {
-                $isMatch = ($actualValue -eq $expectedValue)
+                # Explicit $null check: in PowerShell, $null -eq $false is $true, which would
+                # cause false PASSes when a property was never set (e.g. AllowSharedKeyAccess)
+                if ($null -eq $actualValue) {
+                    $isMatch = $false
+                }
+                else {
+                    $isMatch = ($actualValue -eq $expectedValue)
+                }
             }
             else {
                 $isMatch = ([string]$actualValue -eq [string]$expectedValue)
@@ -1480,8 +1509,24 @@ function Invoke-GraphAPIPropertyCheck {
 
             # Handle both PSObject properties and hashtable keys
             if ($currentObj -is [hashtable] -or $currentObj -is [System.Collections.IDictionary]) {
+                # Graph API returns camelCase keys (e.g. 'isEnabled') but ControlDefinitions
+                # may use PascalCase (e.g. 'IsEnabled') — do case-insensitive key lookup
+                $matchedKey = $null
                 if ($currentObj.ContainsKey($segment)) {
-                    $currentObj = $currentObj[$segment]
+                    $matchedKey = $segment
+                }
+                else {
+                    # Case-insensitive fallback search
+                    foreach ($k in $currentObj.Keys) {
+                        if ([string]::Equals($k, $segment, [System.StringComparison]::OrdinalIgnoreCase)) {
+                            $matchedKey = $k
+                            break
+                        }
+                    }
+                }
+
+                if ($null -ne $matchedKey) {
+                    $currentObj = $currentObj[$matchedKey]
                 }
                 else {
                     $resolved = $false
@@ -1507,11 +1552,15 @@ function Invoke-GraphAPIPropertyCheck {
             $isMatch = ($null -eq $actualValue)
         }
         elseif ($expectedValue -is [bool]) {
-            # Graph API may return booleans as strings or actual bools
-            if ($actualValue -is [bool]) {
+            # Explicit $null check: in PowerShell, $null -eq $false is $true
+            if ($null -eq $actualValue) {
+                $isMatch = $false
+            }
+            elseif ($actualValue -is [bool]) {
                 $isMatch = ($actualValue -eq $expectedValue)
             }
             else {
+                # Graph API may return booleans as strings
                 $isMatch = ([string]$actualValue -eq [string]$expectedValue)
             }
         }

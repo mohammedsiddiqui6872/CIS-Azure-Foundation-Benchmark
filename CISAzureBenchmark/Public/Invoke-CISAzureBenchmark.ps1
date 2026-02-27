@@ -284,8 +284,50 @@ function Invoke-CISAzureBenchmark {
         $moduleBasePath = $PSScriptRoot | Split-Path -Parent
         $psd1Path = Join-Path $moduleBasePath 'CISAzureBenchmark.psd1'
 
+        # Separate tenant-level (Identity Services) from subscription-level controls.
+        # Identity checks query Microsoft Graph at the tenant level and produce identical
+        # results regardless of which subscription is active — run them once on the main thread.
+        $identityControls = @($controls | Where-Object { $_.Section -eq 'Identity Services' })
+        $subscriptionControls = @($controls | Where-Object { $_.Section -ne 'Identity Services' })
+
+        $identityResults = @()
+        if ($identityControls.Count -gt 0) {
+            Write-Host "  Running $($identityControls.Count) tenant-level identity check(s) (once for all subscriptions)..." -ForegroundColor Yellow
+            $firstSub = $subscriptionsToScan[0]
+            Set-AzContext -SubscriptionId $firstSub.Id -ErrorAction SilentlyContinue | Out-Null
+            $idEnvInfo = Initialize-CISEnvironment `
+                -SubscriptionId $firstSub.Id `
+                -SkipModuleCheck:$SkipModuleCheck `
+                -ControlsToRun $identityControls
+
+            $primaryMetadata = @{
+                SubscriptionName = $idEnvInfo.SubscriptionName
+                SubscriptionId   = $idEnvInfo.SubscriptionId
+                TenantId         = $idEnvInfo.TenantId
+                ScannedBy        = $idEnvInfo.ScannedBy
+                ScanTimestamp    = $idEnvInfo.ScanTimestamp
+            }
+
+            $idCache = Initialize-CISResourceCache -ControlsToRun $identityControls
+            foreach ($ctrl in $identityControls) {
+                $result = Invoke-CISCheckSafely `
+                    -ControlDef $ctrl `
+                    -ResourceCache $idCache `
+                    -EnvironmentInfo $idEnvInfo
+                if ($result) {
+                    $identityResults += $result
+                    $combinedResults.Add($result)
+                }
+            }
+            Write-Host "  Identity checks complete ($($identityResults.Count) results)" -ForegroundColor Green
+            Write-Host ""
+        }
+
         Write-Host "  Launching parallel scans for $($subscriptionsToScan.Count) subscriptions..." -ForegroundColor Yellow
         Write-Host ""
+
+        # Pre-serialize identity results so parallel runspaces can include them
+        $identityResultsForParallel = $identityResults
 
         $subscriptionsToScan | ForEach-Object -Parallel {
             $targetSub = $_
@@ -296,7 +338,8 @@ function Invoke-CISAzureBenchmark {
             $bag = $using:parallelCombinedResults
             $subDataDict = $using:parallelMultiSubData
             $metaDict = $using:parallelPrimaryMeta
-            $controlDefs = $using:controls
+            $controlDefs = $using:subscriptionControls
+            $idResults = $using:identityResultsForParallel
             $skipMod = $using:SkipModuleCheck
             $excludeTag = $using:ExcludeResourceTag
             $modPath = $using:psd1Path
@@ -339,9 +382,14 @@ function Invoke-CISAzureBenchmark {
             $resourceCache = Initialize-CISResourceCache @cacheParams
             Write-Host "  [$subName] Resource cache ready" -ForegroundColor Green
 
-            # Execute checks
+            # Execute subscription-level checks only (identity checks already ran on main thread)
             Write-Host "  [$subName] Running compliance checks..." -ForegroundColor Yellow
             $subResults = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+            # Include the shared identity results in this subscription's results
+            foreach ($idResult in $idResults) {
+                $subResults.Add($idResult)
+            }
 
             foreach ($ctrl in $controlDefs) {
                 $result = Invoke-CISCheckSafely `
@@ -392,7 +440,7 @@ function Invoke-CISAzureBenchmark {
                 }
             }
 
-            # Store per-subscription data
+            # Store per-subscription data (includes identity results for per-sub reports)
             [void]$subDataDict.TryAdd($envInfo.SubscriptionId, @{
                 Name     = $envInfo.SubscriptionName
                 TenantId = $envInfo.TenantId
@@ -421,7 +469,7 @@ function Invoke-CISAzureBenchmark {
         foreach ($r in $parallelCombinedResults) {
             $combinedResults.Add($r)
         }
-        if ($parallelPrimaryMeta.ContainsKey('first')) {
+        if (-not $primaryMetadata -and $parallelPrimaryMeta.ContainsKey('first')) {
             $primaryMetadata = $parallelPrimaryMeta['first']
         }
 
@@ -429,6 +477,10 @@ function Invoke-CISAzureBenchmark {
         # ============================================================
         # SEQUENTIAL scan (default, or PS 5.1 fallback)
         # ============================================================
+        # Track tenant-level (Identity Services) results from the first subscription
+        # to avoid duplicate checks in multi-sub mode (they query Graph, not per-sub resources)
+        $tenantLevelResults = $null
+
         foreach ($targetSub in $subscriptionsToScan) {
             $subIndex++
 
@@ -501,6 +553,17 @@ function Invoke-CISAzureBenchmark {
                     -Status "$($ctrl.ControlId) - $($ctrl.Title)" `
                     -Current $checkCount -Total $controls.Count
 
+                # Skip tenant-level (Identity Services) checks on subsequent subscriptions —
+                # they query Microsoft Graph at the tenant level and produce identical results
+                if ($AllSubscriptions -and $subIndex -gt 1 -and $ctrl.Section -eq 'Identity Services' -and $null -ne $tenantLevelResults) {
+                    $cachedResult = $tenantLevelResults[$ctrl.ControlId]
+                    if ($cachedResult) {
+                        $subResults.Add($cachedResult)
+                        $combinedResults.Add($cachedResult)
+                        continue
+                    }
+                }
+
                 $result = Invoke-CISCheckSafely `
                     -ControlDef $ctrl `
                     -ResourceCache $resourceCache `
@@ -509,6 +572,20 @@ function Invoke-CISAzureBenchmark {
                 if ($result) {
                     $subResults.Add($result)
                     $combinedResults.Add($result)
+                }
+            }
+
+            # Cache tenant-level results from first subscription for reuse
+            if ($AllSubscriptions -and $subIndex -eq 1 -and $null -eq $tenantLevelResults) {
+                $tenantLevelResults = @{}
+                foreach ($r in $subResults) {
+                    $ctrlDef = $controls | Where-Object { $_.ControlId -eq $r.ControlId } | Select-Object -First 1
+                    if ($ctrlDef -and $ctrlDef.Section -eq 'Identity Services') {
+                        $tenantLevelResults[$r.ControlId] = $r
+                    }
+                }
+                if ($tenantLevelResults.Count -gt 0) {
+                    Write-Verbose "  Cached $($tenantLevelResults.Count) tenant-level identity results for reuse across subscriptions"
                 }
             }
 
