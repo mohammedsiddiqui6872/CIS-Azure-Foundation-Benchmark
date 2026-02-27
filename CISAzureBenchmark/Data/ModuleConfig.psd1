@@ -22,10 +22,4 @@
     MfaFallbackMaxUsers    = 500
     MfaFallbackBatchSize   = 50
 
-    # Behavior when no resources found for a check
-    # 'PASS' = no resources means compliant; 'WARNING' = flag for review
-    NoResourceBehavior     = 'PASS'
-
-    # PSGallery update check on startup
-    SkipUpdateCheck        = $false
 }
