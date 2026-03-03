@@ -218,18 +218,50 @@ function Test-CIS217-DatabricksDiagnostics {
         $failedList   = [System.Collections.Generic.List[string]]::new()
         $passedCount  = 0
 
+        # CIS 2.1.7 requires specific diagnostic log categories for Databricks
+        $requiredCategories = @('accounts', 'clusters', 'notebook', 'jobs')
+
         foreach ($ws in $workspaces) {
             try {
                 $diagSettings = @(Get-AzDiagnosticSetting -ResourceId $ws.Id -ErrorAction Stop)
-                if ($diagSettings.Count -gt 0) {
+                if ($diagSettings.Count -eq 0) {
+                    $failedList.Add("$($ws.Name) (no diagnostic settings configured)")
+                    continue
+                }
+
+                # Collect all enabled log categories across all diagnostic settings
+                $enabledCategories = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                $hasAllLogs = $false
+                foreach ($setting in $diagSettings) {
+                    if ($setting.Log) {
+                        foreach ($log in $setting.Log) {
+                            if ($log.Enabled -eq $true -and $log.Category) {
+                                [void]$enabledCategories.Add($log.Category)
+                            }
+                            if ($log.Enabled -eq $true -and $log.CategoryGroup -eq 'allLogs') {
+                                $hasAllLogs = $true
+                            }
+                        }
+                    }
+                }
+
+                if ($hasAllLogs) {
+                    # allLogs category group covers all categories
+                    $passedCount++
+                    continue
+                }
+
+                # Check that all required categories are enabled
+                $missingCategories = @($requiredCategories | Where-Object { -not $enabledCategories.Contains($_) })
+                if ($missingCategories.Count -eq 0) {
                     $passedCount++
                 }
                 else {
-                    $failedList.Add("$($ws.Name) (RG: $($ws.ResourceGroupName))")
+                    $failedList.Add("$($ws.Name) (missing log categories: $($missingCategories -join ', '))")
                 }
             }
             catch {
-                $failedList.Add("$($ws.Name) (RG: $($ws.ResourceGroupName)) [Error: $($_.Exception.Message)]")
+                $failedList.Add("$($ws.Name) (RG: $($ws.ResourceGroupName)) [Error: $(Format-CISErrorMessage $_.Exception.Message)]")
             }
         }
 
@@ -454,7 +486,29 @@ function Test-CIS2111-DatabricksPrivateEndpoints {
         foreach ($ws in $workspaces) {
             $peConnections = $ws.PrivateEndpointConnections
             if ($peConnections -and $peConnections.Count -gt 0) {
-                $passedCount++
+                # CIS requires at least one connection with state 'Approved'
+                $approvedConnections = @($peConnections | Where-Object {
+                    $state = $null
+                    if ($_.PrivateLinkServiceConnectionState) {
+                        $state = $_.PrivateLinkServiceConnectionState.Status
+                    }
+                    if (-not $state -and $_.ConnectionState) {
+                        $state = $_.ConnectionState.Status
+                    }
+                    $state -eq 'Approved'
+                })
+                if ($approvedConnections.Count -gt 0) {
+                    $passedCount++
+                }
+                else {
+                    $states = ($peConnections | ForEach-Object {
+                        $s = $_.PrivateLinkServiceConnectionState.Status
+                        if (-not $s) { $s = $_.ConnectionState.Status }
+                        if (-not $s) { $s = 'Unknown' }
+                        $s
+                    }) -join ', '
+                    $failedList.Add("$($ws.Name) (no Approved connections; states: $states)")
+                }
             }
             else {
                 $failedList.Add("$($ws.Name) (RG: $($ws.ResourceGroupName))")

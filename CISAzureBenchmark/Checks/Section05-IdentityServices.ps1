@@ -288,7 +288,7 @@ function Test-CIS516-GuestInviteRestrictions {
         $authPolicy = Get-MgPolicyAuthorizationPolicy -ErrorAction Stop
         $allowInvitesFrom = $authPolicy.AllowInvitesFrom
 
-        $acceptableValues = @('adminsAndGuestInviters', 'adminsOnly', 'none')
+        $acceptableValues = @('adminsAndGuestInviters', 'none')
 
         if ($allowInvitesFrom -in $acceptableValues) {
             return New-CISCheckResult `
@@ -445,62 +445,31 @@ function Test-CIS527-SubscriptionOwners {
         $ownerAssignments = @(Get-AzRoleAssignment -RoleDefinitionName 'Owner' -ErrorAction Stop |
             Where-Object { $_.Scope -match '^/subscriptions/[^/]+$' })
 
-        # Separate by type: User, Group, ServicePrincipal
-        $userOwners  = @($ownerAssignments | Where-Object { $_.ObjectType -eq 'User' })
-        $groupOwners = @($ownerAssignments | Where-Object { $_.ObjectType -eq 'Group' })
-        $spOwners    = @($ownerAssignments | Where-Object { $_.ObjectType -notin @('User', 'Group') })
-        $totalCount  = $ownerAssignments.Count
-
-        # Resolve group membership to count actual human owners
-        $groupMemberCount = 0
-        $groupNote = ''
-        if ($groupOwners.Count -gt 0) {
-            foreach ($grp in $groupOwners) {
-                try {
-                    $members = @(Get-MgGroupMember -GroupId $grp.ObjectId -All -ErrorAction Stop)
-                    $userMembers = @($members | Where-Object { $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.user' })
-                    $groupMemberCount += $userMembers.Count
-                } catch {
-                    Write-Verbose "Could not resolve members of group '$($grp.DisplayName)': $($_.Exception.Message)"
-                }
-            }
-            if ($groupMemberCount -gt 0) {
-                $groupNote = " ($groupMemberCount additional user(s) via $($groupOwners.Count) group assignment(s))"
-            } else {
-                $groupNote = " ($($groupOwners.Count) group assignment(s) could not be resolved - actual owner count may differ)"
-            }
-        }
-
-        # Effective user count includes direct users + group members
-        $directUserCount    = $userOwners.Count
-        $effectiveUserCount = $directUserCount + $groupMemberCount
+        # CIS benchmark counts total security principals (users, groups, SPs, managed identities)
+        # assigned the Owner role — NOT expanded group memberships
+        $totalCount = $ownerAssignments.Count
 
         $ownerDetails = ($ownerAssignments | ForEach-Object {
             $type = if ($_.ObjectType -eq 'User') { 'User' } elseif ($_.ObjectType -eq 'Group') { 'Group' } else { $_.ObjectType }
             "$($_.DisplayName) [$type]"
         }) -join ', '
 
-        $spNote = ''
-        if ($spOwners.Count -gt 0) {
-            $spNote = " Note: $($spOwners.Count) owner(s) are service principals (not human users)."
-        }
-
-        if ($effectiveUserCount -ge 2 -and $effectiveUserCount -le 3) {
+        if ($totalCount -ge 2 -and $totalCount -le 3) {
             return New-CISCheckResult `
                 -ControlId $ControlDef.ControlId `
                 -Title $ControlDef.Title `
                 -Status 'PASS' `
-                -Details "Subscription has $effectiveUserCount effective user owner(s) ($directUserCount direct$groupNote), within the recommended range (2-3). All owners: $ownerDetails$spNote" `
+                -Details "Subscription has $totalCount Owner role assignment(s), within the recommended range (2-3). Owners: $ownerDetails" `
                 -TotalResources $totalCount `
                 -PassedResources $totalCount `
                 -FailedResources 0
         }
 
-        if ($effectiveUserCount -lt 2) {
-            $details = "Subscription has only $effectiveUserCount effective user owner(s) ($directUserCount direct$groupNote). Minimum 2 recommended for availability. All owners: $ownerDetails$spNote"
+        if ($totalCount -lt 2) {
+            $details = "Subscription has only $totalCount Owner role assignment(s). Minimum 2 recommended for availability. Owners: $ownerDetails"
         }
         else {
-            $details = "Subscription has $effectiveUserCount effective user owner(s) ($directUserCount direct$groupNote), exceeding the recommended maximum of 3. All owners: $ownerDetails$spNote"
+            $details = "Subscription has $totalCount Owner role assignment(s), exceeding the recommended maximum of 3. Owners: $ownerDetails"
         }
 
         return New-CISCheckResult `

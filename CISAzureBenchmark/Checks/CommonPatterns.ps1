@@ -863,7 +863,7 @@ function Invoke-KeyVaultPropertyCheck {
                     $isMatch = ($null -eq $actualValue)
                 }
                 elseif ($expectedValue -is [bool]) {
-                    $isMatch = ($actualValue -eq $expectedValue)
+                    $isMatch = ($null -ne $actualValue -and [bool]$actualValue -eq $expectedValue)
                 }
                 else {
                     $isMatch = ([string]$actualValue -eq [string]$expectedValue)
@@ -1002,6 +1002,9 @@ function Invoke-KeyVaultKeyExpiryCheck {
                 $keys = @(Get-AzKeyVaultKey -VaultName $vaultName -ErrorAction Stop)
 
                 foreach ($key in $keys) {
+                    # Skip disabled keys — CIS only requires expiry on active keys
+                    if ($key.Enabled -ne $true) { continue }
+
                     $totalKeys++
 
                     if ($null -ne $key.Expires) {
@@ -1157,6 +1160,9 @@ function Invoke-KeyVaultSecretExpiryCheck {
                 $secrets = @(Get-AzKeyVaultSecret -VaultName $vaultName -ErrorAction Stop)
 
                 foreach ($secret in $secrets) {
+                    # Skip disabled secrets — CIS only requires expiry on active secrets
+                    if ($secret.Enabled -ne $true) { continue }
+
                     $totalSecrets++
 
                     if ($null -ne $secret.Expires) {

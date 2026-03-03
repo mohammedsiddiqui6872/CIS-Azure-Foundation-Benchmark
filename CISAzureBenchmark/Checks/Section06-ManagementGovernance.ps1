@@ -186,8 +186,11 @@ function Test-CIS6114-KeyVaultLogging {
                     continue
                 }
 
-                # Check for audit log category enabled
-                $hasAuditLog = $false
+                # CIS requires both 'audit' and 'allLogs' category groups to be enabled.
+                # Also accept the legacy 'AuditEvent' category for older Az.Monitor modules.
+                $hasAudit   = $false
+                $hasAllLogs = $false
+
                 foreach ($setting in $diagSettings) {
                     # Support both $setting.Logs (newer Az.Monitor) and $setting.Log (older Az.Monitor)
                     $logEntries = if ($setting.Logs) { $setting.Logs } elseif ($setting.Log) { $setting.Log } else { $null }
@@ -195,25 +198,25 @@ function Test-CIS6114-KeyVaultLogging {
                         $auditLog = $logEntries | Where-Object {
                             ($_.Category -eq 'AuditEvent' -or $_.Category -eq 'audit') -and $_.Enabled -eq $true
                         }
-                        if ($auditLog) {
-                            $hasAuditLog = $true
-                            break
-                        }
+                        if ($auditLog) { $hasAudit = $true }
                     }
-                    # Also check for the newer category group approach
+                    # Check category groups (newer approach)
                     if ($setting.LogCategoryGroup) {
-                        $auditGroup = $setting.LogCategoryGroup | Where-Object {
-                            ($_.CategoryGroup -eq 'audit' -or $_.CategoryGroup -eq 'allLogs') -and $_.Enabled -eq $true
-                        }
-                        if ($auditGroup) {
-                            $hasAuditLog = $true
-                            break
+                        foreach ($group in $setting.LogCategoryGroup) {
+                            if ($group.Enabled -eq $true) {
+                                if ($group.CategoryGroup -eq 'audit')   { $hasAudit   = $true }
+                                if ($group.CategoryGroup -eq 'allLogs') { $hasAllLogs = $true }
+                            }
                         }
                     }
                 }
 
-                if ($hasAuditLog) {
+                if ($hasAudit -and $hasAllLogs) {
                     $passedCount++
+                }
+                elseif ($hasAudit) {
+                    # audit is enabled but allLogs is not — partial compliance
+                    $failedList.Add("$($kv.VaultName) (missing 'allLogs' category group)")
                 }
                 else {
                     $failedList.Add("$($kv.VaultName) (audit logs not enabled)")

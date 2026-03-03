@@ -1292,7 +1292,7 @@
             ProfileLevel     = 1
             Severity         = 'High'
             CheckPattern     = 'NSGPortCheck'
-            Port             = -1
+            Port             = @(53, 123, 161, 389, 1900)
             Protocol         = 'UDP'
             ServiceName      = 'UDP'
             Description      = 'UDP access from the Internet should be restricted to prevent unauthorized access.'
@@ -1525,7 +1525,7 @@
             Section          = 'Security Services'
             Subsection       = 'Microsoft Defender for Cloud'
             AssessmentStatus = 'Automated'
-            ProfileLevel     = 1
+            ProfileLevel     = 2
             Severity         = 'High'
             CheckPattern     = 'DefenderPlan'
             DefenderPlanName = 'Api'
@@ -1572,7 +1572,7 @@
             Section          = 'Security Services'
             Subsection       = 'Microsoft Defender for Cloud'
             AssessmentStatus = 'Automated'
-            ProfileLevel     = 1
+            ProfileLevel     = 2
             Severity         = 'High'
             CheckPattern     = 'Custom'
             CheckFunction    = 'Test-CIS8133-EndpointProtection'
@@ -2008,7 +2008,7 @@
             Section          = 'Security Services'
             Subsection       = 'Key Vault'
             AssessmentStatus = 'Automated'
-            ProfileLevel     = 1
+            ProfileLevel     = 2
             Severity         = 'High'
             CheckPattern     = 'Custom'
             CheckFunction    = 'Test-CIS838-KeyVaultPrivateEndpoints'
@@ -2023,7 +2023,7 @@
             Section          = 'Security Services'
             Subsection       = 'Key Vault'
             AssessmentStatus = 'Automated'
-            ProfileLevel     = 1
+            ProfileLevel     = 2
             Severity         = 'Medium'
             CheckPattern     = 'Custom'
             CheckFunction    = 'Test-CIS839-KeyRotation'
@@ -2087,7 +2087,7 @@
             Section          = 'Security Services'
             Subsection       = 'DDoS Protection'
             AssessmentStatus = 'Automated'
-            ProfileLevel     = 1
+            ProfileLevel     = 2
             Severity         = 'High'
             CheckPattern     = 'Custom'
             CheckFunction    = 'Test-CIS85-DDoSProtection'
@@ -2248,7 +2248,7 @@
             Section          = 'Storage Services'
             Subsection       = 'Storage Accounts - Networking'
             AssessmentStatus = 'Automated'
-            ProfileLevel     = 1
+            ProfileLevel     = 2
             Severity         = 'High'
             CheckPattern     = 'Custom'
             CheckFunction    = 'Test-CIS9321-StoragePrivateEndpoints'
@@ -2327,7 +2327,7 @@
             Section          = 'Storage Services'
             Subsection       = 'Storage Accounts'
             AssessmentStatus = 'Automated'
-            ProfileLevel     = 1
+            ProfileLevel     = 2
             Severity         = 'Medium'
             CheckPattern     = 'Custom'
             CheckFunction    = 'Test-CIS935-TrustedServices'
@@ -2420,7 +2420,7 @@
             Section          = 'Storage Services'
             Subsection       = 'Storage Accounts'
             AssessmentStatus = 'Automated'
-            ProfileLevel     = 1
+            ProfileLevel     = 2
             Severity         = 'Medium'
             CheckPattern     = 'Custom'
             CheckFunction    = 'Test-CIS9311-StorageRedundancy'

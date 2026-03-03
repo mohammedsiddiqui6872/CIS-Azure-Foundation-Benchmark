@@ -137,7 +137,7 @@ function Test-CIS75-NSGFlowLogRetention {
         [Parameter(Mandatory)] [hashtable]$ControlDef,
         [Parameter(Mandatory)] [hashtable]$ResourceCache
     )
-    Test-FlowLogRetention -ControlDef $ControlDef -ResourceCache $ResourceCache -FlowLogType 'NSG'
+    Test-FlowLogRetention -ControlDef $ControlDef -ResourceCache $ResourceCache -FlowLogType 'NSG' -TargetResourceFilter 'Microsoft\.Network/networkSecurityGroups'
 }
 
 function Test-CIS76-NetworkWatcher {

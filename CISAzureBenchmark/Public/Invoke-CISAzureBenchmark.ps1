@@ -231,6 +231,24 @@ function Invoke-CISAzureBenchmark {
     # ----------------------------------------------------------------
     # Default: scan ALL enabled subscriptions automatically.
     # Use -SubscriptionId to target a single subscription instead.
+
+    # Ensure Azure is connected before enumerating subscriptions
+    $azContext = $null
+    try { $azContext = Get-AzContext -ErrorAction Stop } catch { $azContext = $null }
+    if (-not $azContext -or -not $azContext.Subscription) {
+        Write-Host '  Azure is not connected. Launching interactive login...' -ForegroundColor Yellow
+        try {
+            Connect-AzAccount -ErrorAction Stop | Out-Null
+            $azContext = Get-AzContext -ErrorAction Stop
+            Write-Host '  Azure connected successfully.' -ForegroundColor Green
+            Write-Host ''
+        }
+        catch {
+            Write-Error "Failed to connect to Azure: $($_.Exception.Message)"
+            return
+        }
+    }
+
     $subscriptionsToScan = @()
 
     if ($SubscriptionId) {
