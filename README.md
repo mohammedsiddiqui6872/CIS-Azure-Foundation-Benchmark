@@ -7,11 +7,14 @@
 [![CIS Benchmark](https://img.shields.io/badge/CIS%20Benchmark-v5.0.0-orange)](https://www.cisecurity.org/benchmark/azure)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow)](https://buymeacoffee.com/integrateditsolutions)
 
-A PowerShell module that evaluates Azure subscriptions against the **CIS Microsoft Azure Foundations Benchmark v5.0.0**. It runs live checks against Azure Resource Manager and Microsoft Graph APIs, then generates a self-contained HTML dashboard along with JSON and CSV reports showing compliance status.
+A PowerShell module that evaluates Azure subscriptions against the **CIS Microsoft Azure Foundations Benchmark v5.0.0**. It runs live checks against Azure Resource Manager and Microsoft Graph APIs, then generates a self-contained HTML dashboard along with JSON, CSV, and SARIF reports showing compliance status.
 
 - **155 controls** covered across 7 service categories
 - **93 Automated** checks + **62 Manual** checks with remediation guidance
-- **Multi-subscription** scanning with in-dashboard subscription switcher
+- **Multi-subscription** scanning with parallel execution (PS 7+)
+- **4 report formats** -- HTML dashboard, JSON, CSV, and SARIF
+- **Scan comparison** -- diff/trend analysis between scans
+- **Remediation scripts** -- auto-generated PowerShell fix scripts for failed controls
 - **Zero external dependencies** -- HTML report works offline and air-gapped
 - **Read-only** -- requests only `.Read.All` Graph permissions, never modifies your environment
 
@@ -72,36 +75,89 @@ Import-Module ./CIS-Azure-Foundation-Benchmark/CISAzureBenchmark/CISAzureBenchma
 
 ## Prerequisites
 
-### One-Time Setup
+**PowerShell 7.2 or later** is required (PowerShell 5.1 is supported but parallel scanning requires PS 7+).
+
+### Register the Security Resource Provider
+
+This is a one-time requirement per subscription for Defender checks:
 
 ```powershell
-# Connect to Azure
-Connect-AzAccount
-
-# Connect to Microsoft Graph with required scopes (read-only)
-Connect-MgGraph -Scopes "Policy.Read.All,Directory.Read.All,UserAuthenticationMethod.Read.All,Reports.Read.All"
-
-# Register the Security resource provider (required per subscription for Defender checks)
 Register-AzResourceProvider -ProviderNamespace Microsoft.Security
 ```
 
-**PowerShell 7.2 or later** is required.
+---
+
+## Connecting to Azure
+
+The module provides `Connect-CISAzureBenchmark` which handles both Azure and Microsoft Graph connections in a single command.
+
+### Interactive Login (Default)
+
+```powershell
+Import-Module CISAzureBenchmark
+Connect-CISAzureBenchmark
+```
+
+### Service Principal (Client Secret)
+
+```powershell
+$credential = Get-Credential   # Username = ApplicationId, Password = Client Secret
+Connect-CISAzureBenchmark -ServicePrincipal -Credential $credential -TenantId 'your-tenant-id'
+```
+
+### Service Principal (Certificate)
+
+```powershell
+Connect-CISAzureBenchmark -ServicePrincipal -ApplicationId 'your-app-id' -CertificateThumbprint 'your-cert-thumbprint' -TenantId 'your-tenant-id'
+```
+
+### Managed Identity
+
+```powershell
+Connect-CISAzureBenchmark -Identity
+```
+
+### Manual Connection (Alternative)
+
+You can also connect manually if you prefer:
+
+```powershell
+Connect-AzAccount
+Connect-MgGraph -Scopes "Policy.Read.All,Directory.Read.All,UserAuthenticationMethod.Read.All,Reports.Read.All"
+```
+
+### Disconnecting
+
+```powershell
+Disconnect-CISAzureBenchmark
+```
 
 ---
 
 ## Usage
 
-### Single Subscription Scan
+### Quick Start
 
 ```powershell
 Import-Module CISAzureBenchmark
-Invoke-CISAzureBenchmark -OutputDirectory ./reports -OutputFormat All -ProfileLevel 2
+Connect-CISAzureBenchmark
+Invoke-CISAzureBenchmark -OutputDirectory ./reports -OutputFormat All
+```
+
+### Single Subscription Scan
+
+```powershell
+Invoke-CISAzureBenchmark -SubscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -OutputDirectory ./reports
 ```
 
 ### Multi-Subscription Scan
 
 ```powershell
-Invoke-CISAzureBenchmark -AllSubscriptions -OutputDirectory ./reports -OutputFormat All
+# Scans all accessible subscriptions (default behavior)
+Invoke-CISAzureBenchmark -OutputDirectory ./reports -OutputFormat All
+
+# Parallel scanning for faster multi-sub scans (PowerShell 7+ only)
+Invoke-CISAzureBenchmark -Parallel -ThrottleLimit 5 -OutputDirectory ./reports
 ```
 
 ### Filtered Scans
@@ -121,16 +177,66 @@ Invoke-CISAzureBenchmark -ControlId '8.1.3.1','9.1.1'
 
 # Exclude controls
 Invoke-CISAzureBenchmark -ExcludeControlId '5.2.1','5.2.2'
+
+# Exclude resources by tag
+Invoke-CISAzureBenchmark -ExcludeResourceTag @{ Environment = 'dev' }
+
+# Custom config overrides
+Invoke-CISAzureBenchmark -ConfigPath ./my-config.psd1
+
+# Suppress auto-opening the HTML report
+Invoke-CISAzureBenchmark -NoAutoOpen
 ```
 
-### Working with Reports
+### Compare Scans (Trend Analysis)
 
 ```powershell
-# Re-generate HTML from a saved JSON scan
+# Compare a baseline scan against a current scan
+Compare-CISBenchmarkResults -BaselinePath ./reports/baseline.json -CurrentPath ./reports/current.json
+
+# Generate an HTML diff report
+Compare-CISBenchmarkResults -BaselinePath ./reports/baseline.json -CurrentPath ./reports/current.json -OutputPath ./reports/diff.html
+```
+
+Returns new failures, resolved issues, regressions, improvements, and score delta.
+
+### Generate Remediation Scripts
+
+```powershell
+# From a live scan result
+$results = Invoke-CISAzureBenchmark
+Export-CISRemediationScript -Results $results.Results -OutputPath ./remediation.ps1
+
+# From a saved JSON report
+Export-CISRemediationScript -JsonPath ./reports/scan.json -OutputPath ./remediation.ps1
+```
+
+Generates a PowerShell script with remediation commands for each failed control, grouped by section.
+
+### Re-generate Reports
+
+```powershell
+# Re-generate all report formats from a saved JSON scan
+Export-CISReport -JsonPath ./reports/scan.json -OutputFormat All
+
+# Generate only HTML
 Export-CISReport -JsonPath ./reports/scan.json -OutputFormat HTML
 
-# List all controls without running checks
+# Generate SARIF for security tool integration
+Export-CISReport -JsonPath ./reports/scan.json -OutputFormat SARIF
+```
+
+### List Controls
+
+```powershell
+# List all controls
 Get-CISControlList | Format-Table ControlId, Title, ProfileLevel, AssessmentStatus
+
+# Filter by severity
+Get-CISControlList -Severity High,Critical | Format-Table ControlId, Title, Severity
+
+# Filter by section
+Get-CISControlList -Section '8' | Format-Table ControlId, Title, AssessmentStatus
 ```
 
 ---
@@ -140,8 +246,9 @@ Get-CISControlList | Format-Table ControlId, Title, ProfileLevel, AssessmentStat
 | Format | Description |
 |--------|-------------|
 | **HTML** | Self-contained interactive dashboard with executive summary, donut chart, section breakdown, sortable/filterable controls table, expandable detail rows, dark/light mode, and subscription switcher for multi-sub scans. Works offline with zero external dependencies. |
-| **JSON** | Machine-readable output with full metadata, suitable for programmatic analysis or re-generating reports via `Export-CISReport`. |
+| **JSON** | Machine-readable output with full metadata, suitable for programmatic analysis, re-generating reports via `Export-CISReport`, or scan comparison via `Compare-CISBenchmarkResults`. |
 | **CSV** | Flat tabular export for spreadsheet analysis or integration with other compliance tools. |
+| **SARIF** | SARIF v2.1.0 format for integration with security scanning tools, CI/CD pipelines, and GitHub Advanced Security. |
 
 ---
 
@@ -149,9 +256,13 @@ Get-CISControlList | Format-Table ControlId, Title, ProfileLevel, AssessmentStat
 
 | Function | Description |
 |----------|-------------|
-| `Invoke-CISAzureBenchmark` | Run compliance checks against one or more subscriptions |
+| `Connect-CISAzureBenchmark` | Connect to Azure and Microsoft Graph with support for interactive, service principal, certificate, and managed identity auth |
+| `Disconnect-CISAzureBenchmark` | Disconnect from Azure and Microsoft Graph sessions |
+| `Invoke-CISAzureBenchmark` | Run compliance checks against one or more subscriptions with filtering and parallel execution |
 | `Get-CISControlList` | List and filter all 155 control definitions without running checks |
-| `Export-CISReport` | Re-generate HTML, JSON, or CSV reports from a previously saved JSON scan |
+| `Export-CISReport` | Re-generate HTML, JSON, CSV, or SARIF reports from a previously saved JSON scan |
+| `Compare-CISBenchmarkResults` | Compare two scan results to show compliance trends, regressions, and improvements |
+| `Export-CISRemediationScript` | Generate a PowerShell remediation script from scan results for failed controls |
 
 ---
 
