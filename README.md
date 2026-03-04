@@ -5,7 +5,7 @@
 [![PowerShell](https://img.shields.io/badge/PowerShell-7.2%2B-blue)](https://github.com/PowerShell/PowerShell)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 [![CIS Benchmark](https://img.shields.io/badge/CIS%20Benchmark-v5.0.0-orange)](https://www.cisecurity.org/benchmark/azure)
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow)](https://buymeacoffee.com/integrateditsolutions)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow)]((https://buymeacoffee.com/mohammedsiddiqui))
 
 A PowerShell module that evaluates Azure subscriptions against the **CIS Microsoft Azure Foundations Benchmark v5.0.0**. It runs live checks against Azure Resource Manager and Microsoft Graph APIs, then generates a self-contained HTML dashboard along with JSON, CSV, and SARIF reports showing compliance status.
 
