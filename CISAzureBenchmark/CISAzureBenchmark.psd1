@@ -1,6 +1,6 @@
 @{
     RootModule        = 'CISAzureBenchmark.psm1'
-    ModuleVersion     = '5.1.0'
+    ModuleVersion     = '5.2.0'
     GUID              = 'b8f4e2a1-3c6d-4f89-9a2e-7d1b5c3e8f40'
     Author            = 'Mohammed Siddiqui'
     CompanyName       = 'powershellnerd.com'
